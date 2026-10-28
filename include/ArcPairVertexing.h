@@ -37,27 +37,29 @@
 namespace k4vertexing::arcpair {
 
 struct Config {
-  // momentum used for the multiple-scattering estimate
+  // ---- detector: magnetic field --------------------------------------------
   double bFieldForMomentum = 0.0;   // T, converts the input track omega [1/mm] into pT (must be set)
-  double defaultPt = 10.0;          // GeV, used when the input track has omega = 0
-  double momentumResolution = 0.0;  // sigma(p)/p of the input tracks
-  double minMomentum = 2.0;         // GeV, floor
-  double hitResolution = 1.0;       // mm per coordinate
   // field mismatch between where the circle is fitted and the region it is
   // extrapolated through; adds 0.5*0.3*dB/pT*s^2 to the bending-plane error
   double fieldUncertainty = 0.0;    // T
-  bool useMaterial = true;          // multiple scattering in the track errors
+  // ---- detector: resolutions --------------------------------------------------
+  double hitResolution = 1.0;       // mm per coordinate
+  double momentumResolution = 0.0;  // sigma(p)/p of the input tracks
+  // ---- detector: material (multiple scattering in the track errors) -----------
+  bool useMaterial = true;
   // material shell (between inner and outer box) and the region beyond it
   double shellX0 = 0.0;
   double shellInnerR = 0.0, shellOuterR = 0.0;
   double shellInnerZ = 0.0, shellOuterZ = 0.0;
   double outsideX0 = 0.0;
   double outsideThickness = 1.0;    // mm, depth over which outsideX0 is spread
+  // ---- physics: momentum used for the multiple-scattering estimate -------------
+  double defaultPt = 10.0;          // GeV, used when the input track has omega = 0
+  double minMomentum = 2.0;         // GeV, floor
+  // ---- algorithm: track model and vertex fit -----------------------------------
   bool fitCurvature = true;
   unsigned minHits = 3;
-  // topology
   double upstreamTolerance = 100.0; // mm, vertex may lie this far past a first hit
-  // numerics
   int nSteps = 40;                  // steps of the material integrals
   int maxIterations = 12;           // Gauss-Newton iterations of the vertex fit
   double jacobianStep = 1.0;        // mm, step of the numerical Jacobian

@@ -1,7 +1,10 @@
 """
 Run the two pair vertexers on IDEA muon-system tracks (decays outside the solenoid):
-  HelixPairVertexFinder : 3D stepped helix, barrel and endcap
-  ArcPairVertexFinder   : local arc fit with a chi2 vertex fit
+  HelixPairVertexFinder : 3D stepped helix from the track state, barrel and endcap
+  ArcPairVertexFinder   : local arc fit to the hits with a chi2 vertex fit
+
+The muon-system tracks must come from the current CombinatorialTrackFinder, whose
+stored track state follows the EDM4hep convention.
 
 All the IDEA numbers (field map, material, region, resolutions) are set here;
 the C++ defaults describe no detector.
@@ -41,6 +44,8 @@ parser.add_argument("--fieldUncertainty", type=float, default=0.5,
                     help="arc: field mismatch [T] in the bending-plane error; 0 = off")
 parser.add_argument("--noCurvature", action="store_true", help="arc: straight line in xy instead of a circle")
 parser.add_argument("--debug", action="store_true", help="print the per-event counts of both finders")
+parser.add_argument("--stateLocation", type=int, default=2,
+                    help="helix: track state used (1 AtIP, 2 AtFirstHit, 3 AtLastHit)")
 args = parser.parse_args()
 
 svc = IOSvc("IOSvc")
@@ -65,31 +70,40 @@ helix = HelixPairVertexFinder(
     "HelixPairVertexFinder",
     InputTracks=[args.inputTracks],
     OutputVertices=["MuonSystemHelixVertices"],
+
+    # ---- track input -----------------------------------------------------------
+    StateLocation=args.stateLocation,
+
+    # ---- detector: magnetic field ----------------------------------------------------
     # field map of the IDEA_o1_v05 simulation: +2 T inside the coil volume,
     # -1.7 T return field everywhere else (where the muon chambers are)
-    InnerField=2.0,
-    OuterField=-1.7,
-    FieldR=2300.0,
-    FieldHalfZ=2616.0,        # 1.2 x coil half length
-    # energy loss: dual-readout calorimeter shell + iron yoke beyond it
+    InnerField=2.0,                    # T
+    OuterField=-1.7,                   # T
+    FieldR=2300.0,                     # mm
+    FieldHalfZ=2616.0,                 # mm, 1.2 x coil half length
+
+    # ---- detector: material (energy loss added back while propagating) --------------
+    # dual-readout calorimeter shell + iron yoke beyond it
     # (dE/dx calibrated on truth, 1.36 x nominal in the calorimeter)
-    ShellInner=2475.0,
-    ShellOuter=4525.0,
-    ShellBeamHole=252.0,
-    dEdxShell=1.36e-3,        # GeV/mm
-    dEdxOutside=1.97e-3,      # GeV/mm
-    ParticleMass=0.1056584,   # muons
-    # muon-system scale of the track model and propagation
-    MinHits=3,
-    MinXYSpan=30.0,
-    Step=20.0,
+    ShellInner=2475.0,                 # mm
+    ShellOuter=4525.0,                 # mm
+    ShellBeamHole=252.0,               # mm
+    dEdxShell=1.36e-3,                 # GeV/mm
+    dEdxOutside=1.97e-3,               # GeV/mm
+
+    # ---- physics ---------------------------------------------------------------------------
+    ParticleMass=0.1056584,            # GeV, muons
+
+    # ---- algorithm: propagation and vertex search ------------------------------------------
+    Step=20.0,                         # mm
     BackFactor=1.3,
-    UpstreamTolerance=100.0,
-    # selection
+    UpstreamTolerance=100.0,           # mm
+
+    # ---- vertex selection ------------------------------------------------------------------
+    MaxPairDCA=300.0,                  # mm
     Region=args.region,
     RegionR=SOLENOID_R,
     RegionHalfZ=SOLENOID_HALF_Z,
-    MaxPairDCA=300.0,
     OutputLevel=INFO,
 )
 
@@ -100,31 +114,40 @@ arc = ArcPairVertexFinder(
     "ArcPairVertexFinder",
     InputTracks=[args.inputTracks],
     OutputVertices=["MuonSystemVertices"],
-    # StandaloneMuonTracks compute omega with 2 T (although the chambers sit in -1.7 T)
-    BFieldForMomentum=2.0,
-    MomentumResolution=0.20,  # sigma(p)/p of the standalone muon system
-    HitResolution=1.0,        # mm
+
+    # ---- track input -----------------------------------------------------------
+    MinHits=3,
+
+    # ---- detector: magnetic field ----------------------------------------------------
+    BFieldForMomentum=2.0,             # T, field used by the tracking to compute omega
     FieldUncertainty=args.fieldUncertainty,
-    # multiple scattering: dual-readout calorimeter shell + muon-system yoke
+
+    # ---- detector: resolutions ----------------------------------------------------------
+    HitResolution=1.0,                 # mm
+    MomentumResolution=0.20,           # sigma(p)/p of the standalone muon system
+
+    # ---- detector: material (multiple scattering in the track errors) ------------------
+    # dual-readout calorimeter shell + muon-system yoke
     UseMaterialEffects=not args.noMaterial,
     ShellX0=90.0,
-    ShellInnerR=2400.0,
-    ShellOuterR=4500.0,
-    ShellInnerZ=2400.0,
-    ShellOuterZ=4300.0,
+    ShellInnerR=2400.0,                # mm
+    ShellOuterR=4500.0,                # mm
+    ShellInnerZ=2400.0,                # mm
+    ShellOuterZ=4300.0,                # mm
     OutsideX0=40.0,
-    OutsideThickness=2000.0,
+    OutsideThickness=2000.0,           # mm
+
+    # ---- algorithm: track model and vertex fit -----------------------------------------------
     FitCurvature=not args.noCurvature,
-    MinHits=3,
-    # muon-system scale of the numerics
-    JacobianStep=1.0,
-    ConvergenceDistance=0.1,
-    UpstreamTolerance=100.0,
-    # selection (HNL mN = 20 GeV working point)
+    UpstreamTolerance=100.0,           # mm
+    JacobianStep=1.0,                  # mm
+    ConvergenceDistance=0.1,           # mm
+
+    # ---- vertex selection ------------------------------------------------------------------
+    MaxPairDCA=100.0,                  # mm
     Region=args.region,
     RegionR=SOLENOID_R,
     RegionHalfZ=SOLENOID_HALF_Z,
-    MaxPairDCA=100.0,
     OutputLevel=INFO,
 )
 

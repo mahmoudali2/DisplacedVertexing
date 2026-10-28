@@ -135,6 +135,8 @@ struct GraphDisplacedVertexFinder final
     edm4hep::TrackState corrected = *state;
     if (m_muonSystemConvention)
       correctMuonSystemState(corrected);
+    else
+      moveStateToOrigin(corrected); // the Delphes perigee is about the origin
 
     const TVectorD parameters = toDelphesPerigee(corrected);
     const TMatrixDSym covariance = toDelphesPerigeeCovariance(corrected);
@@ -154,7 +156,7 @@ struct GraphDisplacedVertexFinder final
     out.PT = pt;
     out.Mass = mass;
     out.Charge = (corrected.omega > 0.f) ? +1 : -1;
-    out.Momentum.SetXYZM(pt * std::cos(state->phi), pt * std::sin(state->phi), pz, mass);
+    out.Momentum.SetXYZM(pt * std::cos(corrected.phi), pt * std::sin(corrected.phi), pz, mass);
     // No per-hit timing in this input; ErrorT <= 0 tells the kernel to skip timing.
     out.Position.SetXYZT(state->referencePoint.x, state->referencePoint.y, state->referencePoint.z, 0.0);
     out.ErrorT = -1.0;
@@ -281,34 +283,39 @@ private:
     kernel.fTimingZ = m_timingZ;
   }
 
-  // --- interface -----------------------------------------------------------
+  // ===== track input =====================================================================
   Gaudi::Property<int> m_trackStateLocation{this, "TrackStateLocation", edm4hep::TrackState::AtIP,
                                             "TrackState to read (1 = AtIP, 3 = AtLastHit)"};
   Gaudi::Property<bool> m_muonSystemConvention{
       this, "MuonSystemTrackConvention", false,
-      "Input tracks come from StandaloneMuonTracking: flip the sign of d0 and omega and move z0 from the "
-      "first muon hit to the perigee (see correctMuonSystemState). Use with the AtLastHit state"};
+      "Only for files from older StandaloneMuonTracking versions, whose AtLastHit state has inverted d0/omega "
+      "signs and z0 at the first hit (see correctMuonSystemState). Off for CombinatorialTrackFinder output"};
   Gaudi::Property<bool> m_skipFailedFits{this, "SkipFailedFitTracks", true,
                                          "Ignore tracks whose upstream fit failed (chi2 < 0 or ndf <= 0)"};
-  Gaudi::Property<double> m_magneticFieldZ{this, "MagneticFieldZ", 2.0, "Solenoid field [T]"};
-  Gaudi::Property<double> m_particleMass{this, "ParticleMass", 0.1056583755, "Mass hypothesis [GeV]"};
-  Gaudi::Property<int> m_algorithmType{this, "AlgorithmType", 2, "Value written to Vertex::algorithmType"};
 
-  // --- track preselection ---------------------------------------------------
+  // ===== detector ========================================================================
+  Gaudi::Property<double> m_magneticFieldZ{this, "MagneticFieldZ", 2.0, "Solenoid field [T]"};
+  Gaudi::Property<double> m_beamSpotSigmaX{this, "BeamSpotSigmaX", 0.1, "Beam-spot sigma x [mm]"};
+  Gaudi::Property<double> m_beamSpotSigmaY{this, "BeamSpotSigmaY", 0.1, "Beam-spot sigma y [mm]"};
+  Gaudi::Property<double> m_beamSpotSigmaZ{this, "BeamSpotSigmaZ", 1.0, "Beam-spot sigma z [mm]"};
+  Gaudi::Property<double> m_timingR{this, "TimingR", 2.25, "Timing layer radius [m]"};
+  Gaudi::Property<double> m_timingZ{this, "TimingZ", 2.5, "Timing layer half-length [m]"};
+
+  // ===== physics =========================================================================
+  Gaudi::Property<double> m_particleMass{this, "ParticleMass", 0.1056583755, "Mass hypothesis [GeV]"};
+
+  // ===== track preselection ==============================================================
   Gaudi::Property<double> m_minTrackIPSig{this, "MinTrackIPSig", 3.0, "Minimum impact-parameter significance"};
   Gaudi::Property<double> m_minD0{this, "MinD0", 0.0, "Minimum |d0| [mm]"};
   Gaudi::Property<double> m_minZ0{this, "MinZ0", 0.0, "Minimum |z0| [mm]"};
   Gaudi::Property<double> m_minTrackPT{this, "MinTrackPT", 0.1, "Minimum track pT [GeV]"};
 
-  // --- primary vertex -------------------------------------------------------
-  Gaudi::Property<double> m_beamSpotSigmaX{this, "BeamSpotSigmaX", 0.1, "Beam-spot sigma x [mm]"};
-  Gaudi::Property<double> m_beamSpotSigmaY{this, "BeamSpotSigmaY", 0.1, "Beam-spot sigma y [mm]"};
-  Gaudi::Property<double> m_beamSpotSigmaZ{this, "BeamSpotSigmaZ", 1.0, "Beam-spot sigma z [mm]"};
+  // ===== algorithm: primary vertex =======================================================
   Gaudi::Property<double> m_pvChi2NDFMax{this, "PVChi2NDFMax", 9.0, "Max chi2/ndf for the primary-vertex fit"};
   Gaudi::Property<bool> m_usePVCut{this, "UsePVCut", true, "Split prompt/displaced tracks using the PV"};
   Gaudi::Property<double> m_pvCutChi2{this, "PVCutChi2", 9.0, "chi2 for associating a track to the PV"};
 
-  // --- clustering -----------------------------------------------------------
+  // ===== algorithm: clustering ===========================================================
   Gaudi::Property<int> m_seedSelector{this, "SeedSelector", 0, "0: min pT, 1: IP significance, 2: high-pT lepton"};
   Gaudi::Property<double> m_minSeedPT{this, "MinSeedPT", 1.0, "Minimum seed-track pT [GeV]"};
   Gaudi::Property<double> m_minSeedIPSig{this, "MinSeedIPSig", 5.0, "Minimum seed IP significance"};
@@ -322,7 +329,7 @@ private:
   Gaudi::Property<bool> m_usePairGuard{this, "UsePairGuard", true, "First-hit guard on pairs"};
   Gaudi::Property<bool> m_pruneBridges{this, "PruneBridges", true, "Prune weakly supported graph bridges"};
 
-  // --- fitter ---------------------------------------------------------------
+  // ===== algorithm: vertex fit ===========================================================
   Gaudi::Property<double> m_chi2PairCut{this, "Chi2PairCut", 9.21, "chi2 cut on two-track fits"};
   Gaudi::Property<double> m_chi2TripletCut{this, "Chi2TripletCut", 9.21, "chi2 cut on three-track fits"};
   Gaudi::Property<double> m_weightCut{this, "WeightCut", 0.1, "Minimum robust track weight"};
@@ -334,14 +341,15 @@ private:
   Gaudi::Property<double> m_chi2AssociationMax{this, "Chi2AssociationMax", 4.0, "Max chi2 to attach leftover tracks"};
   Gaudi::Property<bool> m_correctMomenta{this, "CorrectMomenta", true, "Refit track momenta at the vertex"};
 
-  // --- timing (off by default: fitted tracks carry no per-hit time) ----------
+  // ===== algorithm: timing (off by default: fitted tracks carry no per-hit time) =========
   Gaudi::Property<bool> m_useTiming{this, "UseTiming", false, "Use track timing in the fit"};
   Gaudi::Property<double> m_timeGate{this, "TimeGate", 9.21, "chi2 gate on the time residual"};
   Gaudi::Property<double> m_timeVarianceCap{this, "TimeVarianceCap", 4.0, "Cap on the time variance"};
-  Gaudi::Property<double> m_timingR{this, "TimingR", 2.25, "Timing layer radius [m]"};
-  Gaudi::Property<double> m_timingZ{this, "TimingZ", 2.5, "Timing layer half-length [m]"};
 
-  Gaudi::Property<bool> m_verbose{this, "VerboseKernel", false, "Verbose printout from the ported kernel"};
+  // ===== output ==========================================================================
+  Gaudi::Property<int> m_algorithmType{this, "AlgorithmType", 2, "Value written to Vertex::algorithmType"};
+  Gaudi::Property<bool> m_verbose{this, "VerboseKernel", false, "Verbose printout from the ported kernel"
+};
 };
 
 DECLARE_COMPONENT(GraphDisplacedVertexFinder)

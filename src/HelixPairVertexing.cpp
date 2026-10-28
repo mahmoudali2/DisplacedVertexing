@@ -4,49 +4,14 @@
  */
 #include "HelixPairVertexing.h"
 
-#include <TMatrixDSym.h>
-#include <TMatrixDSymEigen.h>
-
 #include <algorithm>
-#include <array>
 #include <cmath>
 #include <limits>
-#include <numeric>
 
 namespace k4vertexing::helixpair {
 
 namespace {
 constexpr double kNaN = std::numeric_limits<double>::quiet_NaN();
-
-/// least squares A x = y for three parameters, through the normal equations
-bool solve3(const std::vector<std::array<double, 3>>& A, const std::vector<double>& y, double x[3]) {
-  double M[3][4] = {};
-  for (std::size_t r = 0; r < A.size(); ++r)
-    for (int i = 0; i < 3; ++i) {
-      for (int j = 0; j < 3; ++j)
-        M[i][j] += A[r][i] * A[r][j];
-      M[i][3] += A[r][i] * y[r];
-    }
-  for (int c = 0; c < 3; ++c) { // Gaussian elimination with partial pivoting
-    int piv = c;
-    for (int r = c + 1; r < 3; ++r)
-      if (std::fabs(M[r][c]) > std::fabs(M[piv][c]))
-        piv = r;
-    if (std::fabs(M[piv][c]) < 1e-300)
-      return false;
-    std::swap(M[c], M[piv]);
-    for (int r = 0; r < 3; ++r) {
-      if (r == c)
-        continue;
-      const double f = M[r][c] / M[c][c];
-      for (int k = c; k < 4; ++k)
-        M[r][k] -= f * M[c][k];
-    }
-  }
-  for (int i = 0; i < 3; ++i)
-    x[i] = M[i][3] / M[i][i];
-  return true;
-}
 
 /// closest approach of the segments p0-p1 and q0-q1: fractions s, t and the distance
 double segmentPOCA(const TVector3& p0, const TVector3& p1, const TVector3& q0, const TVector3& q1, double& s,
@@ -80,129 +45,7 @@ double dEdxAt(const TVector3& p, const Config& cfg) {
   return 0.0;
 }
 
-bool HelixTrack::build(std::vector<TVector3> hits, const Config& cfg) {
-  if (hits.size() < cfg.minHits)
-    return false;
-  std::sort(hits.begin(), hits.end(), [](const TVector3& a, const TVector3& b) { return a.Mag() < b.Mag(); });
-  // optionally keep only the innermost hits (closest to the decay)
-  if (cfg.maxHitsInFit > 0 && hits.size() > cfg.maxHitsInFit)
-    hits.resize(cfg.maxHitsInFit);
-  const int n = static_cast<int>(hits.size());
-  m_nHits = n;
-  m_h0 = hits.front();
-  // the helix is fitted in the field at the innermost hit
-  m_fitField = fieldAt(m_h0, cfg);
-
-  double span = 0;
-  for (const auto& h : hits)
-    span = std::max(span, std::hypot(h.X() - m_h0.X(), h.Y() - m_h0.Y()));
-  m_line = true;
-  // no field at the hits: no curvature to fit, straight line
-  if (span >= cfg.minXYSpan && m_fitField != 0) {
-    // algebraic circle fit (coordinates centred for conditioning)
-    double mx = 0, my = 0;
-    for (const auto& h : hits) {
-      mx += h.X() / n;
-      my += h.Y() / n;
-    }
-    std::vector<std::array<double, 3>> A(n);
-    std::vector<double> y(n);
-    for (int i = 0; i < n; ++i) {
-      const double x = hits[i].X() - mx, yy = hits[i].Y() - my;
-      A[i] = {2 * x, 2 * yy, 1.0};
-      y[i] = x * x + yy * yy;
-    }
-    double sol[3];
-    bool ok = solve3(A, y, sol);
-    double xc = sol[0] + mx, yc = sol[1] + my;
-    double R = ok ? std::sqrt(std::max(sol[2] + sol[0] * sol[0] + sol[1] * sol[1], 1e-9)) : kNaN;
-    // geometric refinement (Gauss-Newton on the distances to the circle)
-    for (int it = 0; ok && it < 8; ++it) {
-      for (int i = 0; i < n; ++i) {
-        const double dx = hits[i].X() - xc, dy = hits[i].Y() - yc, d = std::hypot(dx, dy);
-        A[i] = {-dx / d, -dy / d, -1.0};
-        y[i] = -(d - R);
-      }
-      double st[3];
-      if (!solve3(A, y, st))
-        break;
-      xc += st[0];
-      yc += st[1];
-      R += st[2];
-      if (std::max({std::fabs(st[0]), std::fabs(st[1]), std::fabs(st[2])}) < 1e-3)
-        break;
-    }
-    if (ok && std::isfinite(R) && R > 0 && R < cfg.maxRadius) {
-      std::vector<double> ph(n);
-      for (int i = 0; i < n; ++i) {
-        ph[i] = std::atan2(hits[i].Y() - yc, hits[i].X() - xc);
-        if (i > 0) { // unwrap
-          while (ph[i] - ph[i - 1] > M_PI)
-            ph[i] -= 2 * M_PI;
-          while (ph[i] - ph[i - 1] < -M_PI)
-            ph[i] += 2 * M_PI;
-        }
-      }
-      m_h = ph.back() > ph.front() ? 1.0 : -1.0; // rotation sense of the outward motion
-      std::vector<double> u(n);
-      for (int i = 0; i < n; ++i)
-        u[i] = m_h * (ph[i] - ph[0]);
-      const auto [umin, umax] = std::minmax_element(u.begin(), u.end());
-      double k = 0;
-      if (*umax - *umin > 0) { // slope of z(u)
-        const double ub = std::accumulate(u.begin(), u.end(), 0.0) / n;
-        double zb = 0;
-        for (const auto& h : hits)
-          zb += h.Z() / n;
-        double num = 0, den = 0;
-        for (int i = 0; i < n; ++i) {
-          num += (u[i] - ub) * (hits[i].Z() - zb);
-          den += (u[i] - ub) * (u[i] - ub);
-        }
-        k = num / den;
-      }
-      double z0 = 0;
-      for (int i = 0; i < n; ++i)
-        z0 += (hits[i].Z() - k * u[i]) / n;
-      m_xc = xc;
-      m_yc = yc;
-      m_R = R;
-      m_k = k;
-      m_phi0 = ph[0];
-      m_z0 = z0;
-      m_ds = std::sqrt(R * R + k * k);
-      m_line = false;
-    }
-  }
-  if (m_line) { // principal axis of the hits, oriented outward
-    TVector3 c(0, 0, 0);
-    for (const auto& h : hits)
-      c += h;
-    c *= 1.0 / n;
-    TMatrixDSym scatter(3);
-    for (const auto& h : hits) {
-      const TVector3 d = h - c;
-      for (int i = 0; i < 3; ++i)
-        for (int j = 0; j < 3; ++j)
-          scatter(i, j) += d[i] * d[j];
-    }
-    const TMatrixD vectors = TMatrixDSymEigen(scatter).GetEigenVectors();
-    m_dir = TVector3(vectors(0, 0), vectors(1, 0), vectors(2, 0)).Unit();
-    if ((hits.back() - hits.front()).Dot(m_dir) < 0)
-      m_dir = -m_dir;
-    m_base = c + (m_h0 - c).Dot(m_dir) * m_dir;
-    m_R = std::numeric_limits<double>::infinity();
-    m_k = 0;
-    m_h = 0;
-    m_pMeas = kNaN;
-  } else {
-    const double pt = 0.3 * std::fabs(m_fitField) * m_R * 1e-3;
-    m_pMeas = pt * std::sqrt(1.0 + (m_k / m_R) * (m_k / m_R));
-  }
-  return true;
-}
-
-bool HelixTrack::buildFromState(const StateParams& st, const std::vector<TVector3>& hits, const Config& cfg) {
+bool HelixTrack::build(const StateParams& st, const std::vector<TVector3>& hits, const Config& cfg) {
   // the state describes the track; the hits (possibly none, e.g. a drift-chamber
   // track without silicon hits) only fix where the trajectory starts
   m_nHits = static_cast<int>(hits.size());

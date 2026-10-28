@@ -8,7 +8,7 @@ cuts are set in the steering file.
 
 | Algorithm | Input | What it does |
 |---|---|---|
-| `HelixPairVertexFinder` | track hits or a track state | Describes each track as a helix, from its hits (`TrackInput = hits`) or from a fitted track state (`TrackInput = state`). Steps it inward in 3D through a field map, adding back the energy lost in the material, and takes each pair's point of closest approach as the vertex. Works in the barrel and the endcaps. Also gives the pair mass. |
+| `HelixPairVertexFinder` | track state | Describes each track as a helix from its fitted track state, starting at its innermost hit. Steps it inward in 3D through a field map, adding back the energy lost in the material, and takes each pair's point of closest approach as the vertex. Works in the barrel and the endcaps. Also gives the pair mass. |
 | `ArcPairVertexFinder` | track hits | Refits each track locally from its own hits (circle in xy, line in z), with multiple scattering included in the errors. Extrapolates back only to the decay and fits each pair with a χ² vertex fit, which also gives a covariance. |
 | `GraphDisplacedVertexFinder` | track states | Graph-based multi-track vertex finding (J. Kriewald, arXiv:2510.00856). See `options/README_graph.md`. |
 
@@ -33,20 +33,17 @@ export PYTHONPATH=<path to>/DisplacedVertexing/install/python:$PYTHONPATH
 ## Run
 
 ```bash
-k4run options/runInnerTrackerVertexing.py --inputFile tracks.root --outputFile vertices.root
+k4run options/runHelixPairVertexing.py --inputFile tracks.root --outputFile vertices.root \
+      --inputTracks <track collection> --field 2.0 --stateLocation 2
 ```
 
-Example steering files in `options/`:
-
-| Steering | Use |
+| Steering | Finder |
 |---|---|
-| `runInnerTrackerVertexing.py` | silicon tracker tracks, uniform 2 T field, helix finder |
-| `runMuonSystemVertexing.py` | muon-system tracks of decays outside the solenoid (IDEA field map and material), helix and arc finders |
-| `runGraphVertexFinder.py` | graph finder on fitted tracks |
+| `runHelixPairVertexing.py` | helix finder |
+| `runArcPairVertexing.py` | arc finder |
+| `runGraphVertexing.py` | graph finder |
+| `runMuonSystemVertexing.py` | helix and arc finders with the IDEA muon-system field map and material (decays outside the solenoid) |
 
-Main options of the helix finder for the track input:
-
-- `TrackInput`: `hits` (default) or `state`.
-- `StateLocation`: which track state to use (1 AtIP, 2 AtFirstHit (default), 3 AtLastHit).
-- `PlanarHitsOnly` (default true): skip drift-chamber wire hits. Use `state` for tracks
-  that rely on a drift chamber.
+Each steering lists every property of its finder with the default value, grouped by use:
+track input, detector (field, resolutions, material), physics, algorithm, vertex selection
+and output.

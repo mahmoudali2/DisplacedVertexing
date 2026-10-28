@@ -14,17 +14,19 @@
  * Cuts on the pair mass and opening angle (MinMass/MaxMass/MinCosOpening) are
  * off by default.
  *
- * TrackInput selects what describes each track:
- *   hits  : helix fitted to the track's own hits (default)
- *   state : helix from the track state at StateLocation (d0, phi, omega, z0,
- *           tanLambda); the hits only fix where the trajectory starts. With
- *           StateReference = referencePoint the parameters refer to the state's
- *           referencePoint (EDM4hep standard); "origin" is for producers that
- *           give the parameters w.r.t. (0,0,0) whatever the referencePoint.
+ * Each track is described by its track state at StateLocation (d0, phi, omega,
+ * z0, tanLambda); its innermost space-point hit only fixes where the trajectory
+ * starts (drift-chamber wire hits are not space points and are skipped). With
+ * StateReference = referencePoint the parameters refer to the state's
+ * referencePoint (EDM4hep standard); "origin" is for producers that give the
+ * parameters w.r.t. (0,0,0) whatever the referencePoint.
+ *
+ * Properties are grouped by use: track input, detector (field, material),
+ * physics, algorithm, vertex selection, output.
  *
  * Author: Mahmoud Althakeel
  *
- * Input : edm4hep::TrackCollection  (tracks with their hits attached)
+ * Input : edm4hep::TrackCollection  (tracks with a track state)
  * Output: edm4hep::VertexCollection, best (smallest DCA) pairs first, each track used once
  *   parameters = [ntracks(=2), index1, index2, pairDCA, t1, t2, upstream, inRegion,
  *                 chargeProduct, betweenIPAndHits, mass, cosOpening, p1, p2]
@@ -74,10 +76,6 @@ struct HelixPairVertexFinder final
     m_cfg.dEdxShell = m_dEdxShell;
     m_cfg.dEdxOutside = m_dEdxOutside;
     m_cfg.particleMass = m_particleMass;
-    m_cfg.minHits = m_minHits;
-    m_cfg.maxHitsInFit = m_maxHitsInFit;
-    m_cfg.minXYSpan = m_minXYSpan;
-    m_cfg.maxRadius = m_maxRadius;
     m_cfg.step = m_step;
     m_cfg.backFactor = m_backFactor;
     m_cfg.upstreamTolerance = m_upstreamTolerance;
@@ -96,10 +94,6 @@ struct HelixPairVertexFinder final
       error() << "Step must be positive" << endmsg;
       return StatusCode::FAILURE;
     }
-    if (m_trackInput.value() != "hits" && m_trackInput.value() != "state") {
-      error() << "TrackInput must be hits or state (got '" << m_trackInput.value() << "')" << endmsg;
-      return StatusCode::FAILURE;
-    }
     if (m_stateReference.value() != "referencePoint" && m_stateReference.value() != "origin") {
       error() << "StateReference must be referencePoint or origin" << endmsg;
       return StatusCode::FAILURE;
@@ -114,54 +108,51 @@ struct HelixPairVertexFinder final
            << ", |z| < " << m_fieldHalfZ.value() << " mm) / " << m_outerField.value() << " T, dE/dx shell "
            << m_dEdxShell.value() << " outside " << m_dEdxOutside.value() << " GeV/mm, step " << m_step.value()
            << " mm, Region = " << m_region.value() << ", MaxPairDCA = " << m_maxPairDCA.value()
-           << " mm, TrackInput = " << m_trackInput.value() << endmsg;
+           << " mm, StateLocation = " << m_stateLocation.value() << endmsg;
     return StatusCode::SUCCESS;
   }
 
   edm4hep::VertexCollection operator()(const edm4hep::TrackCollection& tracks) const override {
     edm4hep::VertexCollection vertices;
 
-    // ---- helix fit of every track from its hits -----------------------------
+    // ---- helix of every track from its track state ----------------------------
     std::vector<HelixTrack> helices;
     std::vector<int> sourceIndex;
     int index = 0;
     for (const auto& track : tracks) {
+      // space-point hits: the innermost one is where the trajectory starts
       std::vector<TVector3> hits;
       for (const auto& hit : track.getTrackerHits()) {
         // a drift-chamber hit stores the wire position, not a point on the track
-        if (m_planarHitsOnly && hit.isA<edm4hep::SenseWireHit>())
+        if (hit.isA<edm4hep::SenseWireHit>())
           continue;
         hits.emplace_back(hit.getPosition().x, hit.getPosition().y, hit.getPosition().z);
       }
+      // find the requested state; tracks without it are skipped
       HelixTrack helix;
       bool ok = false;
-      if (m_trackInput.value() == "hits") {
-        ok = helix.build(hits, m_cfg);
-      } else {
-        // find the requested state; tracks without it are skipped
-        for (const auto& state : track.getTrackStates()) {
-          if (state.location != m_stateLocation)
-            continue;
-          StateParams params;
-          params.d0 = state.D0;
-          params.phi = state.phi;
-          params.omega = state.omega;
-          params.z0 = state.Z0;
-          params.tanLambda = state.tanLambda;
-          if (m_stateReversed) {
-            // the state describes the track moving inward: the same helix in the
-            // EDM4hep (outward) convention has phi + pi, -omega and -tanLambda
-            params.phi = state.phi + M_PI;
-            params.omega = -state.omega;
-            params.tanLambda = -state.tanLambda;
-          }
-          if (m_stateReference.value() == "referencePoint")
-            params.reference = TVector3(state.referencePoint[0], state.referencePoint[1], state.referencePoint[2]);
-          else
-            params.reference = TVector3(0, 0, 0);
-          ok = helix.buildFromState(params, hits, m_cfg);
-          break;
+      for (const auto& state : track.getTrackStates()) {
+        if (state.location != m_stateLocation)
+          continue;
+        StateParams params;
+        params.d0 = state.D0;
+        params.phi = state.phi;
+        params.omega = state.omega;
+        params.z0 = state.Z0;
+        params.tanLambda = state.tanLambda;
+        if (m_stateReversed) {
+          // the state describes the track moving inward: the same helix in the
+          // EDM4hep (outward) convention has phi + pi, -omega and -tanLambda
+          params.phi = state.phi + M_PI;
+          params.omega = -state.omega;
+          params.tanLambda = -state.tanLambda;
         }
+        if (m_stateReference.value() == "referencePoint")
+          params.reference = TVector3(state.referencePoint[0], state.referencePoint[1], state.referencePoint[2]);
+        else
+          params.reference = TVector3(0, 0, 0);
+        ok = helix.build(params, hits, m_cfg);
+        break;
       }
       if (ok) {
         helices.push_back(std::move(helix));
@@ -169,7 +160,7 @@ struct HelixPairVertexFinder final
       }
       ++index;
     }
-    debug() << "Helix-fitted " << helices.size() << " of " << tracks.size() << " tracks" << endmsg;
+    debug() << "Helix built for " << helices.size() << " of " << tracks.size() << " tracks" << endmsg;
 
     // ---- vertex every pair, apply the selection ----------------------------
     struct Candidate {
@@ -235,25 +226,9 @@ private:
   Config m_cfg;
   k4vertexing::VertexRegion m_regionCut;
 
-  // --- field map ---
-  Gaudi::Property<double> m_innerField{this, "InnerField", 0.0,
-                                       "Bz inside the cylinder (FieldR, FieldHalfZ) [T] (must be set)"};
-  Gaudi::Property<double> m_outerField{this, "OuterField", 0.0, "Bz outside the cylinder [T]"};
-  Gaudi::Property<double> m_fieldR{this, "FieldR", 1.0e12,
-                                   "Radius of the inner-field cylinder [mm] (default: InnerField everywhere)"};
-  Gaudi::Property<double> m_fieldHalfZ{this, "FieldHalfZ", 1.0e12, "Half length of the inner-field cylinder [mm]"};
-  // --- material map (energy loss) ---
-  Gaudi::Property<double> m_shellInner{this, "ShellInner", 0.0, "Inner box (r and |z|) of the material shell [mm]"};
-  Gaudi::Property<double> m_shellOuter{this, "ShellOuter", 0.0, "Outer box (r and |z|) of the material shell [mm]"};
-  Gaudi::Property<double> m_shellHole{this, "ShellBeamHole", 0.0, "Beam-hole radius of the shell [mm]"};
-  Gaudi::Property<double> m_dEdxShell{this, "dEdxShell", 0.0, "Energy loss in the shell [GeV/mm]; 0 = none"};
-  Gaudi::Property<double> m_dEdxOutside{this, "dEdxOutside", 0.0,
-                                        "Energy loss beyond the shell [GeV/mm]; 0 = none"};
-  // --- track description ---
-  Gaudi::Property<std::string> m_trackInput{this, "TrackInput", "hits",
-                                            "hits: helix fitted to the hits; state: helix from a track state"};
+  // ===== track input ===========================================================
   Gaudi::Property<int> m_stateLocation{this, "StateLocation", edm4hep::TrackState::AtFirstHit,
-                                       "Track state used when TrackInput = state (1 AtIP, 2 AtFirstHit, 3 AtLastHit)"};
+                                       "Track state that describes each track (1 AtIP, 2 AtFirstHit, 3 AtLastHit)"};
   Gaudi::Property<std::string> m_stateReference{
       this, "StateReference", "referencePoint",
       "Point the state parameters refer to: referencePoint (EDM4hep) or origin"};
@@ -261,44 +236,57 @@ private:
       this, "StateReversed", false,
       "The state describes the track moving inward: phi, omega and tanLambda are turned to the outward "
       "direction"};
-  // --- decay products ---
+
+  // ===== detector: magnetic field ==============================================
+  Gaudi::Property<double> m_innerField{this, "InnerField", 0.0,
+                                       "Bz inside the cylinder (FieldR, FieldHalfZ) [T] (must be set)"};
+  Gaudi::Property<double> m_outerField{this, "OuterField", 0.0, "Bz outside the cylinder [T]"};
+  Gaudi::Property<double> m_fieldR{this, "FieldR", 1.0e12,
+                                   "Radius of the inner-field cylinder [mm] (default: InnerField everywhere)"};
+  Gaudi::Property<double> m_fieldHalfZ{this, "FieldHalfZ", 1.0e12, "Half length of the inner-field cylinder [mm]"};
+
+  // ===== detector: material (energy loss added back while propagating) ===========
+  Gaudi::Property<double> m_shellInner{this, "ShellInner", 0.0, "Inner box (r and |z|) of the material shell [mm]"};
+  Gaudi::Property<double> m_shellOuter{this, "ShellOuter", 0.0, "Outer box (r and |z|) of the material shell [mm]"};
+  Gaudi::Property<double> m_shellHole{this, "ShellBeamHole", 0.0, "Beam-hole radius of the shell [mm]"};
+  Gaudi::Property<double> m_dEdxShell{this, "dEdxShell", 0.0, "Energy loss in the shell [GeV/mm]; 0 = none"};
+  Gaudi::Property<double> m_dEdxOutside{this, "dEdxOutside", 0.0,
+                                        "Energy loss beyond the shell [GeV/mm]; 0 = none"};
+
+  // ===== physics =================================================================
   Gaudi::Property<double> m_particleMass{this, "ParticleMass", 0.1056584,
                                          "Mass hypothesis of both tracks for the pair mass [GeV]"};
-  Gaudi::Property<bool> m_planarHitsOnly{this, "PlanarHitsOnly", true,
-                                         "Use only space-point hits: skip drift-chamber wire hits (SenseWireHit)"};
-  // --- track model and propagation ---
-  Gaudi::Property<unsigned> m_minHits{this, "MinHits", 3, "Minimum hits per track"};
-  Gaudi::Property<unsigned> m_maxHitsInFit{this, "MaxHitsInFit", 0,
-                                           "Fit only the N innermost hits (0 = all)"};
-  Gaudi::Property<double> m_minXYSpan{this, "MinXYSpan", 30.0,
-                                      "Minimum xy extent of the hits for a circle fit, else a 3D line [mm]"};
-  Gaudi::Property<double> m_maxRadius{this, "MaxRadius", 2.0e6, "Larger fitted radius = straight line [mm]"};
+
+  // ===== algorithm: propagation and vertex search ===================================
   Gaudi::Property<double> m_step{this, "Step", 20.0, "Propagation step [mm]"};
   Gaudi::Property<double> m_backFactor{this, "BackFactor", 1.3,
                                        "Propagate inward up to this factor x distance of the first hit"};
   Gaudi::Property<double> m_upstreamTolerance{this, "UpstreamTolerance", 100.0,
                                               "Vertex may lie this far past a first hit [mm]"};
-  // --- selection ---
+
+  // ===== vertex selection ==========================================================
+  Gaudi::Property<double> m_maxPairDCA{this, "MaxPairDCA", 300.0,
+                                       "Max distance between the two trajectories at the vertex [mm]"};
+  Gaudi::Property<bool> m_requireOppositeCharge{this, "RequireOppositeCharge", true,
+                                                "Keep only pairs with opposite rotation sense"};
+  Gaudi::Property<bool> m_requireUpstream{this, "RequireUpstream", true,
+                                          "Vertex must lie before every track's first hit"};
+  Gaudi::Property<bool> m_requireBetween{this, "RequireBetweenIPAndHits", true,
+                                         "Vertex closer to the origin than every first hit, on the same side"};
   Gaudi::Property<std::string> m_region{
       this, "Region", "any",
       "Vertex region w.r.t. the cylinder (RegionR, RegionHalfZ): outside, barrel, endcap, inside, any"};
   Gaudi::Property<double> m_regionR{this, "RegionR", 0.0, "Radius of the region cylinder [mm]"};
   Gaudi::Property<double> m_regionHalfZ{this, "RegionHalfZ", 0.0, "Half length of the region cylinder [mm]"};
-  Gaudi::Property<bool> m_requireUpstream{this, "RequireUpstream", true,
-                                          "Vertex must lie before every track's first hit"};
-  Gaudi::Property<bool> m_requireBetween{this, "RequireBetweenIPAndHits", true,
-                                         "Vertex closer to the origin than every first hit, on the same side"};
-  Gaudi::Property<double> m_maxPairDCA{this, "MaxPairDCA", 300.0,
-                                       "Max distance between the two trajectories at the vertex [mm]"};
-  Gaudi::Property<bool> m_requireOppositeCharge{this, "RequireOppositeCharge", true,
-                                                "Keep only pairs with opposite rotation sense"};
   Gaudi::Property<double> m_minMass{this, "MinMass", 0.0, "Min pair mass at the vertex [GeV]"};
   Gaudi::Property<double> m_maxMass{this, "MaxMass", 1.0e9, "Max pair mass at the vertex [GeV]"};
   Gaudi::Property<double> m_minCosOpening{this, "MinCosOpening", -1.0, "Min cosine of the opening angle"};
-  Gaudi::Property<bool> m_keepOverlapping{this, "KeepOverlappingPairs", false,
-                                          "Write pairs sharing a track too (for cut studies)"};
+
+  // ===== output ====================================================================
   Gaudi::Property<bool> m_allowMultipleVertices{this, "AllowMultipleVertices", true,
                                                 "Write every non-overlapping pair, not only the best"};
+  Gaudi::Property<bool> m_keepOverlapping{this, "KeepOverlappingPairs", false,
+                                          "Write pairs sharing a track too (for cut studies)"};
   Gaudi::Property<int> m_algorithmType{this, "AlgorithmType", 4, "edm4hep::Vertex algorithmType tag"};
 };
 

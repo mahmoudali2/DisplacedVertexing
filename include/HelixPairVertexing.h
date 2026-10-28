@@ -1,15 +1,12 @@
 /*
  * Geometry-free 3D two-track vertexing with stepped helix propagation.
  *
- * Unlike the arc vertexer (ArcPairVertexing.h), which describes a track by its
- * transverse distance s from the first hit with z linear in s, every track is
- * treated as a trajectory in 3D, so tracks crossing endcap discs (small xy
- * motion, large z motion) are handled exactly like barrel tracks:
+ * Every track is treated as a trajectory in 3D, so tracks crossing endcap discs
+ * (small xy motion, large z motion) are handled exactly like barrel tracks:
  *
- *   track  : helix fitted to its own hits in the field at its innermost hit
- *            (circle in xy: algebraic fit + geometric Gauss-Newton refinement;
- *            z linear in the turning angle). Tracks without measurable xy
- *            curvature, or with hits in zero field, fall back to a 3D line.
+ *   track  : helix from a fitted track state (d0, phi, omega, z0, tanLambda),
+ *            starting at the innermost track hit. A state without curvature,
+ *            or a start point in zero field, gives a 3D line.
  *   propagation : stepped INWARD from the innermost hit through a two-zone
  *            field map (innerField inside a cylinder, outerField outside) while
  *            the ionisation loss of a material map is added back, so the
@@ -39,23 +36,19 @@
 namespace k4vertexing::helixpair {
 
 struct Config {
-  // field map: innerField for r_xy < fieldR and |z| < fieldHalfZ, outerField elsewhere
+  // ---- detector: magnetic field --------------------------------------------
+  // innerField for r_xy < fieldR and |z| < fieldHalfZ, outerField elsewhere
   double innerField = 0.0;     // T, signed
   double outerField = 0.0;     // T, signed
   double fieldR = 1.0e12;      // mm (default: innerField everywhere)
   double fieldHalfZ = 1.0e12;  // mm
-  // material map for the energy loss (see above)
+  // ---- detector: material (energy loss, see above) --------------------------
   double shellInner = 0.0, shellOuter = 0.0, shellHole = 0.0; // mm
   double dEdxShell = 0.0;      // GeV/mm
   double dEdxOutside = 0.0;    // GeV/mm
-  // decay products
-  double particleMass = 0.1056584; // GeV, mass hypothesis for the pair mass (default muon)
-  // track model
-  unsigned minHits = 3;
-  unsigned maxHitsInFit = 0;   // use only the N innermost hits (0 = all)
-  double minXYSpan = 30.0;     // mm, below: straight line
-  double maxRadius = 2.0e6;    // mm, above: straight line
-  // propagation and vertex search
+  // ---- physics: decay products ------------------------------------------------
+  double particleMass = 0.1056584; // GeV, mass hypothesis of both tracks for the pair mass
+  // ---- algorithm: propagation and vertex search --------------------------------
   double step = 20.0;          // mm
   double backFactor = 1.3;     // propagate inward up to backFactor x |first hit|
   double upstreamTolerance = 100.0; // mm, vertex may lie this far past a first hit
@@ -70,16 +63,12 @@ struct StateParams {
 
 class HelixTrack {
 public:
-  /// helix fitted to the hits (mm)
-  bool build(std::vector<TVector3> hits, const Config& cfg);
+  /// helix from a fitted track state. The innermost hit (if any) only fixes where
+  /// the trajectory starts (t = 0); without hits the point of closest approach to
+  /// the reference point is used (for a state at the first hit that is the first hit).
+  bool build(const StateParams& state, const std::vector<TVector3>& hits, const Config& cfg);
 
-  /// helix taken from a fitted track state instead of the hits. The innermost
-  /// hit (if any) only fixes where the trajectory starts (t = 0); without hits the
-  /// point of closest approach to the reference point is used (for a state at the
-  /// first hit that is the first hit). No minimum number of hits is required.
-  bool buildFromState(const StateParams& state, const std::vector<TVector3>& hits, const Config& cfg);
-
-  /// fitted helix (or line) at 3D path length t from the innermost hit (t < 0: inward)
+  /// helix (or line) at 3D path length t from the innermost hit (t < 0: inward)
   TVector3 point(double t) const;
   /// unit tangent of the outward motion at t
   TVector3 tangent(double t) const;
@@ -96,7 +85,7 @@ public:
   /// equal for equal charges in the same field, so only the product is meaningful
   int rotation() const { return m_line ? 0 : (m_h > 0 ? 1 : -1); }
   double radius() const { return m_R; }
-  /// momentum at the innermost hit [GeV] (NaN for a line)
+  /// momentum at the start point [GeV] (NaN for a line)
   double momentum() const { return m_pMeas; }
   const TVector3& firstHit() const { return m_h0; }
   int nHits() const { return m_nHits; }
@@ -106,7 +95,7 @@ private:
   bool m_line = true;
   // helix
   double m_xc = 0, m_yc = 0, m_R = 0, m_k = 0, m_phi0 = 0, m_z0 = 0, m_ds = 1, m_h = 0;
-  // field the helix was fitted in (field at the innermost hit)
+  // field at the start point (gives the momentum from the curvature)
   double m_fitField = 0;
   // line
   TVector3 m_base, m_dir;

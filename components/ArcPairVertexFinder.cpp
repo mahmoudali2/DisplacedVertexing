@@ -203,20 +203,27 @@ private:
   k4vertexing::VertexRegion m_regionCut;
 
   // --- momentum for the scattering model ---
-  Gaudi::Property<int> m_momentumStateLocation{this, "MomentumStateLocation", edm4hep::TrackState::AtLastHit,
+  // ===== track input =====================================================================
+  Gaudi::Property<int> m_momentumStateLocation{this, "MomentumStateLocation", edm4hep::TrackState::AtFirstHit,
                                                "Track state whose omega gives the momentum"};
+  Gaudi::Property<unsigned> m_minHits{this, "MinHits", 3, "Minimum hits per track"};
+  Gaudi::Property<bool> m_planarHitsOnly{this, "PlanarHitsOnly", true,
+                                         "Use only space-point hits: skip drift-chamber wire hits (SenseWireHit)"};
+
+  // ===== detector: magnetic field ========================================================
   Gaudi::Property<double> m_bFieldForMomentum{
       this, "BFieldForMomentum", 0.0,
       "Field [T] the input tracking used to compute that state's omega (must be set)"};
-  Gaudi::Property<double> m_defaultPt{this, "DefaultPt", 10.0, "pT [GeV] used when the state has omega = 0"};
-  Gaudi::Property<double> m_momentumResolution{this, "MomentumResolution", 0.0, "sigma(p)/p of the input tracks"};
-  Gaudi::Property<double> m_minMomentum{this, "MinMomentum", 2.0, "Momentum floor for scattering [GeV]"};
-  Gaudi::Property<double> m_hitResolution{this, "HitResolution", 1.0, "Hit resolution per coordinate [mm]"};
   Gaudi::Property<double> m_fieldUncertainty{
       this, "FieldUncertainty", 0.0,
       "Field mismatch [T] between where the arc is fitted and where it is extrapolated "
       "(bending-plane error 0.5*0.3*dB/pT*s^2); 0 = off"};
-  // --- material ---
+
+  // ===== detector: resolutions ===========================================================
+  Gaudi::Property<double> m_hitResolution{this, "HitResolution", 1.0, "Hit resolution per coordinate [mm]"};
+  Gaudi::Property<double> m_momentumResolution{this, "MomentumResolution", 0.0, "sigma(p)/p of the input tracks"};
+
+  // ===== detector: material (multiple scattering in the track errors) ====================
   Gaudi::Property<bool> m_useMaterial{this, "UseMaterialEffects", true, "Multiple scattering in the track errors"};
   Gaudi::Property<double> m_shellX0{this, "ShellX0", 0.0,
                                     "Radiation lengths of the material shell (radial depth) in front of the hits"};
@@ -228,40 +235,44 @@ private:
                                       "Radiation lengths beyond the shell (spread over OutsideThickness)"};
   Gaudi::Property<double> m_outsideThickness{this, "OutsideThickness", 1.0,
                                              "Depth over which OutsideX0 is spread [mm]"};
-  Gaudi::Property<bool> m_planarHitsOnly{this, "PlanarHitsOnly", true,
-                                         "Use only space-point hits: skip drift-chamber wire hits (SenseWireHit)"};
-  // --- track model ---
+
+  // ===== physics =========================================================================
+  Gaudi::Property<double> m_defaultPt{this, "DefaultPt", 10.0, "pT [GeV] used when the state has omega = 0"};
+  Gaudi::Property<double> m_minMomentum{this, "MinMomentum", 2.0, "Momentum floor for scattering [GeV]"};
+
+  // ===== algorithm: track model and vertex fit ===========================================
   Gaudi::Property<bool> m_fitCurvature{this, "FitCurvature", true, "Circle in xy (true) or straight line (false)"};
-  Gaudi::Property<unsigned> m_minHits{this, "MinHits", 3, "Minimum hits per track"};
-  // --- numerics ---
+  Gaudi::Property<double> m_upstreamTolerance{this, "UpstreamTolerance", 100.0, "Vertex may lie this far past a first hit [mm]"};
   Gaudi::Property<int> m_materialSteps{this, "MaterialSteps", 40, "Steps of the material integrals"};
   Gaudi::Property<int> m_maxIterations{this, "MaxIterations", 12, "Gauss-Newton iterations of the vertex fit"};
   Gaudi::Property<double> m_jacobianStep{this, "JacobianStep", 1.0,
                                          "Step of the numerical Jacobian [mm] (scale to the vertex resolution)"};
   Gaudi::Property<double> m_convergenceDistance{this, "ConvergenceDistance", 0.1,
                                                 "Stop when the vertex moves less than this [mm]"};
-  // --- selection ---
+
+  // ===== vertex selection ================================================================
+  Gaudi::Property<double> m_maxPairDCA{this, "MaxPairDCA", 100.0,
+                                       "Max distance between the two trajectories at the vertex [mm]"};
+  Gaudi::Property<double> m_maxChi2{this, "MaxChi2", 1.0e9, "Max vertex chi2 (ndf = 1)"};
+  Gaudi::Property<bool> m_requireOppositeCharge{this, "RequireOppositeCharge", true,
+                                                "Keep only opposite-charge pairs"};
+  Gaudi::Property<bool> m_requireUpstream{this, "RequireUpstream", true,
+                                          "Vertex must lie before every track's first hit"};
+  Gaudi::Property<double> m_minUpstreamDistance{this, "MinUpstreamDistance", 0.0,
+                                                "Vertex at least this far before both first hits [mm]"};
+  Gaudi::Property<bool> m_requireBetween{this, "RequireBetweenIPAndHits", true,
+                                         "Vertex closer to the origin than every first hit, on the same side"};
   Gaudi::Property<std::string> m_region{
       this, "Region", "any",
       "Vertex region w.r.t. the cylinder (RegionR, RegionHalfZ): outside, barrel, endcap, inside, any"};
   Gaudi::Property<double> m_regionR{this, "RegionR", 0.0, "Radius of the region cylinder [mm]"};
   Gaudi::Property<double> m_regionHalfZ{this, "RegionHalfZ", 0.0, "Half length of the region cylinder [mm]"};
-  Gaudi::Property<bool> m_requireUpstream{this, "RequireUpstream", true,
-                                          "Vertex must lie before every track's first hit"};
-  Gaudi::Property<double> m_upstreamTolerance{this, "UpstreamTolerance", 100.0, "[mm]"};
-  Gaudi::Property<bool> m_requireBetween{this, "RequireBetweenIPAndHits", true,
-                                         "Vertex closer to the origin than every first hit, on the same side"};
-  Gaudi::Property<double> m_maxPairDCA{this, "MaxPairDCA", 100.0,
-                                       "Max distance between the two trajectories at the vertex [mm]"};
-  Gaudi::Property<double> m_maxChi2{this, "MaxChi2", 1.0e9, "Max vertex chi2 (ndf = 1)"};
-  Gaudi::Property<double> m_minUpstreamDistance{this, "MinUpstreamDistance", 0.0,
-                                                "Vertex at least this far before both first hits [mm]"};
-  Gaudi::Property<bool> m_requireOppositeCharge{this, "RequireOppositeCharge", true,
-                                                "Keep only opposite-charge pairs"};
-  Gaudi::Property<bool> m_keepOverlapping{this, "KeepOverlappingPairs", false,
-                                          "Write pairs sharing a track too (for cut studies)"};
+
+  // ===== output ==========================================================================
   Gaudi::Property<bool> m_allowMultipleVertices{this, "AllowMultipleVertices", true,
                                                 "Write every non-overlapping pair, not only the best"};
+  Gaudi::Property<bool> m_keepOverlapping{this, "KeepOverlappingPairs", false,
+                                          "Write pairs sharing a track too (for cut studies)"};
   Gaudi::Property<int> m_algorithmType{this, "AlgorithmType", 3, "edm4hep::Vertex algorithmType tag"};
 };
 

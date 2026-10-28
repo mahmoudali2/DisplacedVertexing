@@ -1,0 +1,42 @@
+>>> configuring
+-- Found Python: /cvmfs/sw.hsf.org/key4hep/releases/2026-02-01/x86_64-almalinux9-gcc14.2.0-opt/python-venv/1.0-uab3wy/bin/python3.13 (found suitable version "3.13.8", minimum required is "3.13.8") found components: Interpreter Development Development.Module Development.Embed
+-- Found podio: /cvmfs/sw.hsf.org/key4hep/releases/2026-04-08/x86_64-almalinux9-gcc14.2.0-opt/podio/1.7-unrctl/lib64/cmake/podio/podioConfig.cmake
+-- Found nlohmann_json: /cvmfs/sw.hsf.org/key4hep/releases/2026-02-01/x86_64-almalinux9-gcc14.2.0-opt/nlohmann-json/3.12.0-vwmf6m/share/cmake/nlohmann_json/nlohmann_jsonConfig.cmake (found suitable version "3.12.0", minimum required is "3.10.5")
+-- Found EDM4HEP: /cvmfs/sw.hsf.org/key4hep/releases/2026-04-08/x86_64-almalinux9-gcc14.2.0-opt/edm4hep/1.0-beytxn/lib64/cmake/EDM4HEP/EDM4HEPConfig.cmake
+-- Found podio: /cvmfs/sw.hsf.org/key4hep/releases/2026-04-08/x86_64-almalinux9-gcc14.2.0-opt/podio/1.7-unrctl/lib64/cmake/podio/podioConfig.cmake (Required is at least version "1.7.0")
+-- Found Python: /cvmfs/sw.hsf.org/key4hep/releases/2026-02-01/x86_64-almalinux9-gcc14.2.0-opt/python-venv/1.0-uab3wy/bin/python3.13 (found suitable version "3.13.8", minimum required is "3.7") found components: Interpreter Development Development.Module Development.Embed
+-- Found ROOT: /cvmfs/sw.hsf.org/key4hep/releases/2026-04-08/x86_64-almalinux9-gcc14.2.0-opt/root/6.38.04-pbcgqf/share/root/cmake (found version 6.38.04)
+-- Found nlohmann_json: /cvmfs/sw.hsf.org/key4hep/releases/2026-02-01/x86_64-almalinux9-gcc14.2.0-opt/nlohmann-json/3.12.0-vwmf6m/share/cmake/nlohmann_json/nlohmann_jsonConfig.cmake (found version "3.12.0")
+-- Found Gaudi: /cvmfs/sw.hsf.org/key4hep/releases/2026-04-08/x86_64-almalinux9-gcc14.2.0-opt/gaudi/40.2-mwpqwa/lib/cmake/Gaudi (found version 40.2)
+-- Found EDM4HEP: /cvmfs/sw.hsf.org/key4hep/releases/2026-04-08/x86_64-almalinux9-gcc14.2.0-opt/edm4hep/1.0-beytxn/lib64/cmake/EDM4HEP/EDM4HEPConfig.cmake (Required is at least version "1.0.0")
+-- Found ROOT: /cvmfs/sw.hsf.org/key4hep/releases/2026-04-08/x86_64-almalinux9-gcc14.2.0-opt/root/6.38.04-pbcgqf/share/root/cmake (found version 6.38.04)
+-- Found Gaudi: /cvmfs/sw.hsf.org/key4hep/releases/2026-04-08/x86_64-almalinux9-gcc14.2.0-opt/gaudi/40.2-mwpqwa/lib/cmake/Gaudi (found version 40.2)
+-- Configuring done (3.2s)
+-- Generating done (0.3s)
+-- Build files have been written to: /afs/cern.ch/work/m/maali/public/DisplacedVertexing/build
+>>> building
+[ 10%] Building CXX object CMakeFiles/DisplacedVertexing.dir/src/ArcPairVertexing.cpp.o
+[ 20%] Building CXX object CMakeFiles/DisplacedVertexing.dir/src/HelixPairVertexing.cpp.o
+[ 30%] Building CXX object CMakeFiles/DisplacedVertexing.dir/components/ArcPairVertexFinder.cpp.o
+[ 40%] Building CXX object CMakeFiles/DisplacedVertexing.dir/components/HelixPairVertexFinder.cpp.o
+[ 50%] Linking CXX shared module libDisplacedVertexing.so
+[ 70%] Built target DisplacedVertexing
+gmake[2]: Circular DisplacedVertexing.components <- DisplacedVertexing.components dependency dropped.
+[ 80%] Built target DisplacedVertexing_MergeComponents
+[100%] Merging .confdb files for DisplacedVertexing
+[100%] Merging .confdb2 files for DisplacedVertexing
+[100%] Built target DisplacedVertexing_MergeConfdb
+[100%] Built target DisplacedVertexing_MergeConfDB2
+>>> installing into /afs/cern.ch/work/m/maali/public/DisplacedVertexing/install
+-- Install configuration: "Release"
+-- Installing: /afs/cern.ch/work/m/maali/public/DisplacedVertexing/install/lib/cmake/DisplacedVertexing/headers_db.csv
+-- Installing: /afs/cern.ch/work/m/maali/public/DisplacedVertexing/install/lib64/libDisplacedVertexing.so
+-- Set non-toolchain portion of runtime path of "/afs/cern.ch/work/m/maali/public/DisplacedVertexing/install/lib64/libDisplacedVertexing.so" to ""
+-- Installing: /afs/cern.ch/work/m/maali/public/DisplacedVertexing/install/lib64/DisplacedVertexing.components
+-- Installing: /afs/cern.ch/work/m/maali/public/DisplacedVertexing/install/python/DisplacedVertexing/DisplacedVertexingConf.py
+-- Installing: /afs/cern.ch/work/m/maali/public/DisplacedVertexing/install/lib64/DisplacedVertexing.confdb
+-- Installing: /afs/cern.ch/work/m/maali/public/DisplacedVertexing/install/lib64/DisplacedVertexing.confdb2
+-- Installing: /afs/cern.ch/work/m/maali/public/DisplacedVertexing/install/lib64/libDisplacedVertexing.so
+-- Set non-toolchain portion of runtime path of "/afs/cern.ch/work/m/maali/public/DisplacedVertexing/install/lib64/libDisplacedVertexing.so" to ""
+>>> OK
+BUILD_EXIT=0

@@ -21,15 +21,10 @@
  * Material map (dEdxAt): a "shell" between an inner box (r_xy < shellInner,
  * |z| < shellInner) and an outer box (shellOuter), outside a beam hole
  * r_xy < shellHole, with energy loss dEdxShell; dEdxOutside beyond the outer
- * box; nothing inside the inner box. For IDEA: shell = dual-readout
- * calorimeter, outside = iron yoke. A uniform field and zero dE/dx describe a
- * plain tracker.
+ * box; nothing inside the inner box. For example shell = calorimeter,
+ * outside = iron yoke. A uniform field and zero dE/dx describe a plain tracker.
  *
  * No region is assumed: the caller decides where vertices are accepted.
- * Validated (IDEA muon system) against the Python reference
- * (HNL/MS_full_outside/code/helix3d.py, pair_vertex_stepped) on HNL signal: at
- * m_N = 20 GeV the vertex is within 48 mm (barrel) / 72 mm (forward) of the
- * true decay (median), p_reco/p_true = 1.00, m_reco/m_true 0.88-1.25 (16-84 %).
  *
  * Units: mm, GeV, Tesla.
  * Author: Mahmoud Althakeel
@@ -66,10 +61,23 @@ struct Config {
   double upstreamTolerance = 100.0; // mm, vertex may lie this far past a first hit
 };
 
+/// The five helix parameters of a fitted track state (EDM4hep / LCIO convention)
+/// and the point they refer to. Units: mm, 1/mm, rad.
+struct StateParams {
+  double d0 = 0, phi = 0, omega = 0, z0 = 0, tanLambda = 0;
+  TVector3 reference; // parameters describe the point of closest approach to this point
+};
+
 class HelixTrack {
 public:
-  /// hits in mm
+  /// helix fitted to the hits (mm)
   bool build(std::vector<TVector3> hits, const Config& cfg);
+
+  /// helix taken from a fitted track state instead of the hits. The innermost
+  /// hit (if any) only fixes where the trajectory starts (t = 0); without hits the
+  /// point of closest approach to the reference point is used (for a state at the
+  /// first hit that is the first hit). No minimum number of hits is required.
+  bool buildFromState(const StateParams& state, const std::vector<TVector3>& hits, const Config& cfg);
 
   /// fitted helix (or line) at 3D path length t from the innermost hit (t < 0: inward)
   TVector3 point(double t) const;

@@ -1,9 +1,8 @@
 cmake_minimum_required(VERSION 3.12)
 project(DisplacedVertexing LANGUAGES CXX)
 
-# Standalone build of the displaced-vertex finders (arc pair, 3D helix pair,
-# graph-based). The sources mirror Vertexing/ in k4RecTracker-graph; only Gaudi,
-# k4FWCore, EDM4hep and ROOT are needed (no DD4hep, no GenFit).
+# Displaced-vertex finders (arc pair, 3D helix pair, graph-based).
+# Needs Gaudi, k4FWCore, EDM4hep and ROOT.
 
 # Same C++ standard as the Key4hep stack
 set(CMAKE_CXX_STANDARD 20 CACHE STRING "")

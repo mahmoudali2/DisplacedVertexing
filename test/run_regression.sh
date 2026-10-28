@@ -1,14 +1,12 @@
 #!/bin/bash
-# Regression test of the standalone build against the k4RecTracker-graph build.
-# Runs HelixPairVertexFinder + ArcPairVertexFinder with the IDEA muon-system steering (--loose) on one HNL
-# file and compares every vertex with the reference output made on 2026-10-25 by
-# test_vertexing/run_helix_validation.sh. Run on fcc-ironic.
+# Reference test: runs HelixPairVertexFinder + ArcPairVertexFinder with the muon-system
+# steering (--loose) on one file and compares every vertex with a reference output.
 REPO=/afs/cern.ch/work/m/maali/public/DisplacedVertexing
 IN=/eos/user/m/maali/HNL/lowcoupling_full/tracks/lc_mN15_um9p00.root
 REF=/afs/cern.ch/work/m/maali/public/test_vertexing/helix_gaudi_val_lc_mN15_um9p00.root
 OUT=$REPO/test/regression_lc_mN15_um9p00.root
 
-# private podio scratch area (shared /tmp/podio on ironic belongs to another user)
+# private scratch area for podio
 export TMPDIR=/tmp/dv_$(id -u)
 mkdir -p "$TMPDIR"
 

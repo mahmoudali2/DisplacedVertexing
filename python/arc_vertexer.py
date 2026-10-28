@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 """
-Python reference of the muon-system arc vertexer (mirrors the Gaudi algorithm
-MuonSystemArcVertexFinder). Units: mm, GeV, Tesla.
+Python reference of the arc vertexer (mirrors the Gaudi algorithm
+ArcPairVertexFinder). Units: mm, GeV, Tesla.
 
 Per track
   - hits ordered from the IP outward; local frame at the innermost hit h0:

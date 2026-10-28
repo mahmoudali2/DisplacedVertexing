@@ -5,7 +5,7 @@ usage: compare_to_reference.py <new output.root> <reference output.root>
 
 For each vertex collection, count the vertices in both files and find the
 largest difference in vertex position. Both numbers should be zero when the
-standalone build reproduces the k4RecTracker-graph build.
+two outputs agree.
 """
 import sys
 from podio.root_io import Reader

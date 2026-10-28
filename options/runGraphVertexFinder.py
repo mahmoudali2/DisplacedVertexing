@@ -54,8 +54,7 @@ id_service = UniqueIDGenSvc("UniqueIDGenSvc")
 try:
     from Configurables import GraphDisplacedVertexFinder
 except ImportError:
-    # Build-tree fallback: when only the Vertexing target was built, the merged
-    # confdb2 may be missing; the generated configurable module is still there.
+    # used when the Configurables database is not available
     from DisplacedVertexing.DisplacedVertexingConf import GraphDisplacedVertexFinder
 
 # With --openChi2 every chi2 threshold is pushed far beyond any realistic value,

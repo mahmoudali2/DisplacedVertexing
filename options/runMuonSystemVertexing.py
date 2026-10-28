@@ -14,7 +14,7 @@ Example
         --inputFile  hnl_tracks.root \
         --outputFile muon_vertices.root
 
-Output collections (old names kept so the existing analysis scripts work):
+Output collections:
   MuonSystemHelixVertices  (helix, algorithmType 4, unless --noHelix)
   MuonSystemVertices       (arc,   algorithmType 3, unless --noArc)
 

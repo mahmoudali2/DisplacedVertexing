@@ -1,6 +1,6 @@
 /*
  * Gaudi component: geometry-free 3D two-track vertexing of long-lived-particle
- * decays (formerly MuonSystemHelixVertexFinder).
+ * decays.
  *
  * Companion of ArcPairVertexFinder (same input, same output layout plus the pair
  * kinematics). Each track is a helix fitted to its own hits and propagated
@@ -9,13 +9,18 @@
  * Nothing assumes a barrel geometry, so tracks that cross endcap discs are
  * vertexed like barrel tracks. See include/HelixPairVertexing.h.
  *
- * The detector (field map, material, region) is entirely given by properties;
- * the defaults describe no detector. Settings for the IDEA muon system are in
- * options/runMuonSystemVertexing.py (HNL/MS_full_outside main selection:
- * MaxPairDCA = 300 mm, opposite rotation sense, vertex upstream of and between
- * the IP and the first hits, Region = outside the solenoid). The analysis cuts
- * on the pair mass and opening angle depend on the hypothesis and are left to
- * the analysis (MinMass/MaxMass/MinCosOpening are available).
+ * The detector (field map, material, region) is given by properties; the
+ * defaults describe no detector. Example settings are in options/.
+ * Cuts on the pair mass and opening angle (MinMass/MaxMass/MinCosOpening) are
+ * off by default.
+ *
+ * TrackInput selects what describes each track:
+ *   hits  : helix fitted to the track's own hits (default)
+ *   state : helix from the track state at StateLocation (d0, phi, omega, z0,
+ *           tanLambda); the hits only fix where the trajectory starts. With
+ *           StateReference = referencePoint the parameters refer to the state's
+ *           referencePoint (EDM4hep standard); "origin" is for producers that
+ *           give the parameters w.r.t. (0,0,0) whatever the referencePoint.
  *
  * Author: Mahmoud Althakeel
  *
@@ -31,7 +36,9 @@
 #include "Gaudi/Property.h"
 #include "k4FWCore/Transformer.h"
 
+#include <edm4hep/SenseWireHit.h>
 #include <edm4hep/TrackCollection.h>
+#include <edm4hep/TrackState.h>
 #include <edm4hep/VertexCollection.h>
 
 #include "HelixPairVertexing.h"
@@ -89,6 +96,14 @@ struct HelixPairVertexFinder final
       error() << "Step must be positive" << endmsg;
       return StatusCode::FAILURE;
     }
+    if (m_trackInput.value() != "hits" && m_trackInput.value() != "state") {
+      error() << "TrackInput must be hits or state (got '" << m_trackInput.value() << "')" << endmsg;
+      return StatusCode::FAILURE;
+    }
+    if (m_stateReference.value() != "referencePoint" && m_stateReference.value() != "origin") {
+      error() << "StateReference must be referencePoint or origin" << endmsg;
+      return StatusCode::FAILURE;
+    }
     if (!m_regionCut.configure(m_region, m_regionR, m_regionHalfZ)) {
       error() << "Region must be one of outside, barrel, endcap, inside, any (got '" << m_region.value() << "')"
               << endmsg;
@@ -98,7 +113,8 @@ struct HelixPairVertexFinder final
     info() << "Helix pair vertexer: field " << m_innerField.value() << " T (r < " << m_fieldR.value()
            << ", |z| < " << m_fieldHalfZ.value() << " mm) / " << m_outerField.value() << " T, dE/dx shell "
            << m_dEdxShell.value() << " outside " << m_dEdxOutside.value() << " GeV/mm, step " << m_step.value()
-           << " mm, Region = " << m_region.value() << ", MaxPairDCA = " << m_maxPairDCA.value() << " mm" << endmsg;
+           << " mm, Region = " << m_region.value() << ", MaxPairDCA = " << m_maxPairDCA.value()
+           << " mm, TrackInput = " << m_trackInput.value() << endmsg;
     return StatusCode::SUCCESS;
   }
 
@@ -111,10 +127,43 @@ struct HelixPairVertexFinder final
     int index = 0;
     for (const auto& track : tracks) {
       std::vector<TVector3> hits;
-      for (const auto& hit : track.getTrackerHits())
+      for (const auto& hit : track.getTrackerHits()) {
+        // a drift-chamber hit stores the wire position, not a point on the track
+        if (m_planarHitsOnly && hit.isA<edm4hep::SenseWireHit>())
+          continue;
         hits.emplace_back(hit.getPosition().x, hit.getPosition().y, hit.getPosition().z);
+      }
       HelixTrack helix;
-      if (helix.build(hits, m_cfg)) {
+      bool ok = false;
+      if (m_trackInput.value() == "hits") {
+        ok = helix.build(hits, m_cfg);
+      } else {
+        // find the requested state; tracks without it are skipped
+        for (const auto& state : track.getTrackStates()) {
+          if (state.location != m_stateLocation)
+            continue;
+          StateParams params;
+          params.d0 = state.D0;
+          params.phi = state.phi;
+          params.omega = state.omega;
+          params.z0 = state.Z0;
+          params.tanLambda = state.tanLambda;
+          if (m_stateReversed) {
+            // the state describes the track moving inward: the same helix in the
+            // EDM4hep (outward) convention has phi + pi, -omega and -tanLambda
+            params.phi = state.phi + M_PI;
+            params.omega = -state.omega;
+            params.tanLambda = -state.tanLambda;
+          }
+          if (m_stateReference.value() == "referencePoint")
+            params.reference = TVector3(state.referencePoint[0], state.referencePoint[1], state.referencePoint[2]);
+          else
+            params.reference = TVector3(0, 0, 0);
+          ok = helix.buildFromState(params, hits, m_cfg);
+          break;
+        }
+      }
+      if (ok) {
         helices.push_back(std::move(helix));
         sourceIndex.push_back(index);
       }
@@ -200,9 +249,23 @@ private:
   Gaudi::Property<double> m_dEdxShell{this, "dEdxShell", 0.0, "Energy loss in the shell [GeV/mm]; 0 = none"};
   Gaudi::Property<double> m_dEdxOutside{this, "dEdxOutside", 0.0,
                                         "Energy loss beyond the shell [GeV/mm]; 0 = none"};
+  // --- track description ---
+  Gaudi::Property<std::string> m_trackInput{this, "TrackInput", "hits",
+                                            "hits: helix fitted to the hits; state: helix from a track state"};
+  Gaudi::Property<int> m_stateLocation{this, "StateLocation", edm4hep::TrackState::AtFirstHit,
+                                       "Track state used when TrackInput = state (1 AtIP, 2 AtFirstHit, 3 AtLastHit)"};
+  Gaudi::Property<std::string> m_stateReference{
+      this, "StateReference", "referencePoint",
+      "Point the state parameters refer to: referencePoint (EDM4hep) or origin"};
+  Gaudi::Property<bool> m_stateReversed{
+      this, "StateReversed", false,
+      "The state describes the track moving inward: phi, omega and tanLambda are turned to the outward "
+      "direction"};
   // --- decay products ---
   Gaudi::Property<double> m_particleMass{this, "ParticleMass", 0.1056584,
                                          "Mass hypothesis of both tracks for the pair mass [GeV]"};
+  Gaudi::Property<bool> m_planarHitsOnly{this, "PlanarHitsOnly", true,
+                                         "Use only space-point hits: skip drift-chamber wire hits (SenseWireHit)"};
   // --- track model and propagation ---
   Gaudi::Property<unsigned> m_minHits{this, "MinHits", 3, "Minimum hits per track"};
   Gaudi::Property<unsigned> m_maxHitsInFit{this, "MaxHitsInFit", 0,

@@ -3,9 +3,8 @@
  * own hits and extrapolated back only as far as the decay, instead of using a
  * track state at a perigee that may be metres away from the decay.
  *
- * Written for long-lived-particle decays behind the IDEA solenoid with muon-
- * system tracks, but nothing in the code is specific to a detector: the field,
- * the material and the region are configuration (see Config).
+ * Nothing in the code is specific to a detector: the field, the material and
+ * the region are configuration (see Config).
  *
  *   track  : circle in xy + straight line z(s), generalised least-squares fits
  *            in a frame attached to the innermost hit; the hit covariance
@@ -21,7 +20,7 @@
  * |z| < shellInnerZ) and an outer box (shellOuterR, shellOuterZ) holding shellX0
  * radiation lengths across its radial depth, plus a uniform density
  * outsideX0 / outsideThickness beyond the outer box. No material inside the
- * inner box. For IDEA: shell = dual-readout calorimeter, outside = iron yoke.
+ * inner box. For example shell = calorimeter, outside = iron yoke.
  *
  * Units: mm, GeV, Tesla.
  * Author: Mahmoud Althakeel

@@ -1,12 +1,8 @@
 """
-Run the 3D helix pair vertexer on inner-tracker (silicon) tracks, e.g. the CLD
-tracker inside IDEA_w_CLD_IT (GlobalTrackerTracks from the CombinatorialTrackFinder).
+Run the 3D helix pair vertexer on inner-tracker (silicon) tracks.
 
-Settings follow the Python analysis HNL/IDEA_w_CLD_IT/it_events_hyb2.py
-(arXiv:2503.19464-style): uniform 2 T, no energy loss, helix from the 8
-innermost hits, opposite charge, DCA < 2 mm, cos(opening) > -0.95,
-vertex r_xy > 10 mm. The p > 3 GeV cut and the merging of split tracks of that
-analysis are not part of the finder; apply them in the analysis.
+Settings: uniform 2 T, no energy loss, helix from the 8 innermost hits,
+opposite charge, DCA < 2 mm, cos(opening) > -0.95, vertex r_xy > 10 mm.
 
 Author: Mahmoud Althakeel
 

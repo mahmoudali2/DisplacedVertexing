@@ -202,6 +202,72 @@ bool HelixTrack::build(std::vector<TVector3> hits, const Config& cfg) {
   return true;
 }
 
+bool HelixTrack::buildFromState(const StateParams& st, const std::vector<TVector3>& hits, const Config& cfg) {
+  // the state describes the track; the hits (possibly none, e.g. a drift-chamber
+  // track without silicon hits) only fix where the trajectory starts
+  m_nHits = static_cast<int>(hits.size());
+
+  // point of closest approach (PCA) to the reference point, EDM4hep convention
+  const double sinPhi = std::sin(st.phi);
+  const double cosPhi = std::cos(st.phi);
+  const TVector3 pca(st.reference.X() - st.d0 * sinPhi, st.reference.Y() + st.d0 * cosPhi,
+                     st.reference.Z() + st.z0);
+
+  // the trajectory starts at the innermost hit (closest to the origin)
+  TVector3 start = pca;
+  if (!hits.empty()) {
+    start = hits.front();
+    for (const auto& h : hits)
+      if (h.Mag() < start.Mag())
+        start = h;
+  }
+  m_h0 = start;
+  m_fitField = fieldAt(m_h0, cfg);
+
+  // ---- straight line (no curvature or no field) ------------------------------
+  if (st.omega == 0 || m_fitField == 0) {
+    m_line = true;
+    m_dir = TVector3(cosPhi, sinPhi, st.tanLambda).Unit();
+    // base = point of the line closest to the start point
+    m_base = pca + (m_h0 - pca).Dot(m_dir) * m_dir;
+    m_R = std::numeric_limits<double>::infinity();
+    m_k = 0;
+    m_h = 0;
+    m_pMeas = kNaN;
+    return true;
+  }
+
+  // ---- helix ------------------------------------------------------------------
+  // omega > 0: the circle centre lies to the right of the direction of motion,
+  // i.e. the track turns clockwise (rotation sense -1)
+  const double signedRadius = 1.0 / st.omega;
+  m_R = std::fabs(signedRadius);
+  m_xc = pca.X() + signedRadius * sinPhi;
+  m_yc = pca.Y() - signedRadius * cosPhi;
+  m_h = st.omega > 0 ? -1.0 : 1.0;
+  // z changes by tanLambda * R per radian of turning
+  m_k = st.tanLambda * m_R;
+  m_ds = std::sqrt(m_R * m_R + m_k * m_k);
+
+  // phase of the start point on the circle, and z there
+  const double phasePCA = std::atan2(pca.Y() - m_yc, pca.X() - m_xc);
+  const double phaseStart = std::atan2(m_h0.Y() - m_yc, m_h0.X() - m_xc);
+  // turning angle from the PCA to the start point, in the direction of motion
+  double turn = m_h * (phaseStart - phasePCA);
+  while (turn > M_PI)
+    turn -= 2 * M_PI;
+  while (turn < -M_PI)
+    turn += 2 * M_PI;
+  m_phi0 = phaseStart;
+  m_z0 = pca.Z() + m_k * turn;
+  m_line = false;
+
+  // momentum from the curvature in the field at the start point
+  const double pt = 0.3 * std::fabs(m_fitField) * 1e-3 / std::fabs(st.omega);
+  m_pMeas = pt * std::sqrt(1.0 + st.tanLambda * st.tanLambda);
+  return true;
+}
+
 TVector3 HelixTrack::point(double t) const {
   if (m_line)
     return m_base + t * m_dir;

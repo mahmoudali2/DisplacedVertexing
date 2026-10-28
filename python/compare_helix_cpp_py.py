@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""C++ MuonSystemHelixVertexFinder (--loose) vs the Python reference (MS_full_outside/events/<id>.npz, h_* columns) on 2-track events.
+"""C++ HelixPairVertexFinder (--loose) vs the Python reference (MS_full_outside/events/<id>.npz, h_* columns) on 2-track events.
 usage: compare_helix_cpp_py.py <gaudi output.root> <registry id>"""
 import sys
 import numpy as np

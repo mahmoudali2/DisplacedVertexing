@@ -1,6 +1,6 @@
 /*
  * Gaudi component: two-track vertexing of long-lived-particle decays with local
- * arc fits (formerly MuonSystemArcVertexFinder).
+ * arc fits.
  *
  * Each track is refitted locally from its own hits (circle in xy, line in z,
  * with multiple scattering between the hits) and extrapolated back only to the
@@ -8,13 +8,9 @@
  * to its error. Track pairs are vertexed with a chi2 fit. See
  * include/ArcPairVertexing.h.
  *
- * The detector (field used for the momentum, material, region) is entirely
- * given by properties; the defaults describe no detector. Settings for the IDEA
- * muon system are in options/runMuonSystemVertexing.py. With them the HNL
- * (mN = 20 GeV) working point MaxPairDCA = 100 mm, RequireOppositeCharge,
- * RequireBetweenIPAndHits, Region = outside gave 67% efficiency for decays with
- * r_xy > 2.3 m and >= 2 muon tracks, ~15-24 mm resolution (68%) per coordinate
- * and 0.09% fakes per event.
+ * The detector (field used for the momentum, material, region) is given by
+ * properties; the defaults describe no detector. Example settings are in
+ * options/.
  *
  * Author: Mahmoud Althakeel
  *
@@ -28,6 +24,7 @@
 #include "Gaudi/Property.h"
 #include "k4FWCore/Transformer.h"
 
+#include <edm4hep/SenseWireHit.h>
 #include <edm4hep/TrackCollection.h>
 #include <edm4hep/TrackState.h>
 #include <edm4hep/VertexCollection.h>
@@ -116,8 +113,12 @@ struct ArcPairVertexFinder final
     int index = 0;
     for (const auto& track : tracks) {
       std::vector<TVector3> hits;
-      for (const auto& hit : track.getTrackerHits())
+      for (const auto& hit : track.getTrackerHits()) {
+        // a drift-chamber hit stores the wire position, not a point on the track
+        if (m_planarHitsOnly && hit.isA<edm4hep::SenseWireHit>())
+          continue;
         hits.emplace_back(hit.getPosition().x, hit.getPosition().y, hit.getPosition().z);
+      }
       double omega = 0;
       for (const auto& state : track.getTrackStates())
         if (state.location == m_momentumStateLocation) {
@@ -227,6 +228,8 @@ private:
                                       "Radiation lengths beyond the shell (spread over OutsideThickness)"};
   Gaudi::Property<double> m_outsideThickness{this, "OutsideThickness", 1.0,
                                              "Depth over which OutsideX0 is spread [mm]"};
+  Gaudi::Property<bool> m_planarHitsOnly{this, "PlanarHitsOnly", true,
+                                         "Use only space-point hits: skip drift-chamber wire hits (SenseWireHit)"};
   // --- track model ---
   Gaudi::Property<bool> m_fitCurvature{this, "FitCurvature", true, "Circle in xy (true) or straight line (false)"};
   Gaudi::Property<unsigned> m_minHits{this, "MinHits", 3, "Minimum hits per track"};

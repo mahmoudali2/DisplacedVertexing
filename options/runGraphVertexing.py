@@ -45,11 +45,11 @@ parser.add_argument("--noPromptSplit", action="store_true",
                          "LLP daughters look PV-compatible")
 args = parser.parse_args()
 
-svc = IOSvc("IOSvc")
-svc.Input = args.inputFile
-svc.Output = args.outputFile
+inputOutputService = IOSvc("IOSvc")
+inputOutputService.Input = args.inputFile
+inputOutputService.Output = args.outputFile
 
-id_service = UniqueIDGenSvc("UniqueIDGenSvc")
+uniqueIdService = UniqueIDGenSvc("UniqueIDGenSvc")
 
 try:
     from Configurables import GraphDisplacedVertexFinder
@@ -59,9 +59,9 @@ except ImportError:
 
 # With --openChi2 every chi2 threshold is pushed far beyond any realistic value,
 # so nothing is rejected on chi2 and the whole distribution can be inspected.
-CHI2 = 1.0e12 if args.openChi2 else 9.21
+CHI2_CUT = 1.0e12 if args.openChi2 else 9.21
 
-finder = GraphDisplacedVertexFinder(
+graphVertexFinder = GraphDisplacedVertexFinder(
     "GraphDisplacedVertexFinder",
     InputTracks=[args.inputTracks],
     OutputDisplacedVertices=["DisplacedVertices"],
@@ -90,9 +90,9 @@ finder = GraphDisplacedVertexFinder(
     MinTrackPT=0.1,                    # GeV
 
     # ---- algorithm: primary vertex -------------------------------------------------------------
-    PVChi2NDFMax=CHI2,
+    PVChi2NDFMax=CHI2_CUT,
     UsePVCut=True,
-    PVCutChi2=CHI2,
+    PVCutChi2=CHI2_CUT,
 
     # ---- algorithm: clustering (settings for two-track decays) -----------------------------------
     SeedSelector=0,
@@ -105,10 +105,10 @@ finder = GraphDisplacedVertexFinder(
     PruneBridges=True,
 
     # ---- algorithm: vertex fit --------------------------------------------------------------------
-    Chi2PairCut=CHI2,
-    Chi2TripletCut=CHI2,
+    Chi2PairCut=CHI2_CUT,
+    Chi2TripletCut=CHI2_CUT,
     WeightCut=0.1,
-    Chi2NDFMax=CHI2,
+    Chi2NDFMax=CHI2_CUT,
     BridgeCut=(1.0e12 if args.openChi2 else 3.0),
     Chi2Sigmoid=9.21,
     Beta=2.0,
@@ -127,15 +127,15 @@ finder = GraphDisplacedVertexFinder(
     OutputLevel=INFO,
 )
 if args.noPromptSplit:
-    finder.MinTrackIPSig = -1.0
-    finder.MinD0 = -1.0
-    finder.MinZ0 = -1.0
-    finder.UsePVCut = False
+    graphVertexFinder.MinTrackIPSig = -1.0
+    graphVertexFinder.MinD0 = -1.0
+    graphVertexFinder.MinZ0 = -1.0
+    graphVertexFinder.UsePVCut = False
 
 ApplicationMgr(
-    TopAlg=[finder],
+    TopAlg=[graphVertexFinder],
     EvtSel="NONE",
     EvtMax=-1,
-    ExtSvc=[EventDataSvc("EventDataSvc"), id_service],
+    ExtSvc=[EventDataSvc("EventDataSvc"), uniqueIdService],
     OutputLevel=INFO,
 )

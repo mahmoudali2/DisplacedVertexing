@@ -23,33 +23,33 @@ namespace k4vertexing {
 class VertexRegion {
 public:
   /// returns false if the region name is not one of the five above
-  bool configure(const std::string& name, double radius, double halfZ) {
+  bool configure(const std::string& name, double radius, double halfLength) {
     m_name = name;
     m_radius = radius;
-    m_halfZ = halfZ;
+    m_halfLength = halfLength;
     return name == "outside" || name == "barrel" || name == "endcap" || name == "inside" || name == "any";
   }
 
-  bool contains(const TVector3& v) const {
+  bool contains(const TVector3& position) const {
     // where is the point relative to the cylinder?
-    const bool beyondRadius = v.Perp() > m_radius;
-    const bool beyondHalfZ = std::fabs(v.Z()) > m_halfZ;
+    const bool beyondRadius = position.Perp() > m_radius;
+    const bool beyondHalfLength = std::fabs(position.Z()) > m_halfLength;
 
     if (m_name == "outside")
-      return beyondRadius || beyondHalfZ;
+      return beyondRadius || beyondHalfLength;
     if (m_name == "barrel")
       return beyondRadius;
     if (m_name == "endcap")
-      return !beyondRadius && beyondHalfZ;
+      return !beyondRadius && beyondHalfLength;
     if (m_name == "inside")
-      return !beyondRadius && !beyondHalfZ;
+      return !beyondRadius && !beyondHalfLength;
     return true; // "any"
   }
 
 private:
   std::string m_name = "any";
   double m_radius = 0;
-  double m_halfZ = 0;
+  double m_halfLength = 0;
 };
 
 } // namespace k4vertexing

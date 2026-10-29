@@ -16,10 +16,10 @@
  *            perpendicular to the track, z at the same s) -> position,
  *            3x3 covariance, chi2 with ndf = 2N - 3
  *
- * Material model (x0PerMM): a "shell" between an inner box (r_xy < shellInnerR,
- * |z| < shellInnerZ) and an outer box (shellOuterR, shellOuterZ) holding shellX0
+ * Material model (radiationLengthsPerMm): a "shell" between an inner box (r_xy < shellInnerRadius,
+ * |z| < shellInnerHalfLength) and an outer box (shellOuterRadius, shellOuterHalfLength) holding shellRadiationLengths
  * radiation lengths across its radial depth, plus a uniform density
- * outsideX0 / outsideThickness beyond the outer box. No material inside the
+ * outsideRadiationLengths / outsideThickness beyond the outer box. No material inside the
  * inner box. For example shell = calorimeter, outside = iron yoke.
  *
  * Units: mm, GeV, Tesla.
@@ -38,7 +38,7 @@ namespace k4vertexing::arcpair {
 
 struct Config {
   // ---- detector: magnetic field --------------------------------------------
-  double bFieldForMomentum = 0.0;   // T, converts the input track omega [1/mm] into pT (must be set)
+  double fieldForMomentum = 0.0;    // T, converts the input track omega [1/mm] into pT (must be set)
   // field mismatch between where the circle is fitted and the region it is
   // extrapolated through; adds 0.5*0.3*dB/pT*s^2 to the bending-plane error
   double fieldUncertainty = 0.0;    // T
@@ -48,71 +48,74 @@ struct Config {
   // ---- detector: material (multiple scattering in the track errors) -----------
   bool useMaterial = true;
   // material shell (between inner and outer box) and the region beyond it
-  double shellX0 = 0.0;
-  double shellInnerR = 0.0, shellOuterR = 0.0;
-  double shellInnerZ = 0.0, shellOuterZ = 0.0;
-  double outsideX0 = 0.0;
-  double outsideThickness = 1.0;    // mm, depth over which outsideX0 is spread
+  double shellRadiationLengths = 0.0;
+  double shellInnerRadius = 0.0, shellOuterRadius = 0.0;
+  double shellInnerHalfLength = 0.0, shellOuterHalfLength = 0.0;
+  double outsideRadiationLengths = 0.0;
+  double outsideThickness = 1.0;    // mm, depth over which outsideRadiationLengths is spread
   // ---- physics: momentum used for the multiple-scattering estimate -------------
-  double defaultPt = 10.0;          // GeV, used when the input track has omega = 0
-  double minMomentum = 2.0;         // GeV, floor
+  double defaultTransverseMomentum = 10.0; // GeV, used when the input track has omega = 0
+  double minimumMomentum = 2.0;     // GeV, floor
   // ---- algorithm: track model and vertex fit -----------------------------------
   bool fitCurvature = true;
-  unsigned minHits = 3;
+  unsigned minimumHits = 3;
   double upstreamTolerance = 100.0; // mm, vertex may lie this far past a first hit
-  int nSteps = 40;                  // steps of the material integrals
-  int maxIterations = 12;           // Gauss-Newton iterations of the vertex fit
+  int integrationSteps = 40;        // steps of the material integrals
+  int maximumIterations = 12;       // Gauss-Newton iterations of the vertex fit
   double jacobianStep = 1.0;        // mm, step of the numerical Jacobian
   double convergenceDistance = 0.1; // mm, stop when the vertex moves less than this
 };
 
 /// Radiation lengths per mm of path at a point (shell + outside material).
-double x0PerMM(const TVector3& point, const Config& cfg);
+double radiationLengthsPerMm(const TVector3& position, const Config& config);
 
 class ArcTrack {
 public:
   /// hits in mm; omega [1/mm] only sets the momentum for the scattering model
-  bool build(std::vector<TVector3> hits, double omega, const Config& cfg);
+  bool build(std::vector<TVector3> hits, double omega, const Config& config);
 
-  TVector3 point(double s) const;
-  /// local coordinates (s, u) of a point in the frame at the first hit
-  void local(const TVector3& v, double& s, double& u) const;
-  /// u(s) of the fitted circle and its slope du/ds
-  void uOfS(double s, double& u, double& slope) const;
-  double zOfS(double s) const { return m_h0.Z() + m_pz[0] + m_pz[1] * s; }
-  /// sigma of the trajectory perpendicular to it in xy, and in z, at local s
-  void sigmas(double s, const Config& cfg, double& sigmaU, double& sigmaZ) const;
+  /// point of the track at arc position s
+  TVector3 point(double arcPosition) const;
+  /// local coordinates (arc position s along the track, offset u perpendicular to it)
+  /// of a point, in the frame at the first hit
+  void localCoordinates(const TVector3& position, double& arcPosition, double& normalOffset) const;
+  /// offset u(s) of the fitted circle and its slope du/ds
+  void offsetAndSlope(double arcPosition, double& offset, double& slope) const;
+  double zAt(double arcPosition) const { return m_firstHit.Z() + m_parametersZ[0] + m_parametersZ[1] * arcPosition; }
+  /// uncertainty of the trajectory perpendicular to it in xy, and in z, at arc position s
+  void uncertainties(double arcPosition, const Config& config, double& sigmaXY, double& sigmaZ) const;
 
-  const TVector3& firstHit() const { return m_h0; }
-  double dirX() const { return m_t0[0]; }
-  double dirY() const { return m_t0[1]; }
-  double slopeZ() const { return m_pz[1]; }
-  double momentum() const { return m_p; }
+  const TVector3& firstHit() const { return m_firstHit; }
+  double outwardDirectionX() const { return m_outwardDirection[0]; }
+  double outwardDirectionY() const { return m_outwardDirection[1]; }
+  double zSlope() const { return m_parametersZ[1]; }
+  double momentum() const { return m_momentum; }
   double fitChi2() const { return m_chi2; }
-  int nHits() const { return m_nHits; }
+  int numberOfHits() const { return m_numberOfHits; }
 
 private:
-  TVector3 m_h0;
-  double m_t0[2] = {1, 0}, m_n0[2] = {0, 1};
-  std::vector<double> m_pu; // a, b, (kappa)
-  TMatrixDSym m_cu;
-  double m_pz[2] = {0, 0};
-  TMatrixDSym m_cz{2};
-  double m_cosLambda = 1, m_p = 0, m_pt = 0, m_msFactor = 0, m_chi2 = 0;
-  int m_nHits = 0;
+  TVector3 m_firstHit;
+  // local frame at the first hit: outward direction and normal in xy
+  double m_outwardDirection[2] = {1, 0}, m_normalDirection[2] = {0, 1};
+  std::vector<double> m_parametersXY; // offset a, slope b, (curvature)
+  TMatrixDSym m_parameterCovarianceXY;
+  double m_parametersZ[2] = {0, 0};   // z offset c, slope d
+  TMatrixDSym m_parameterCovarianceZ{2};
+  double m_cosLambda = 1, m_momentum = 0, m_transverseMomentum = 0, m_scatteringFactor = 0, m_chi2 = 0;
+  int m_numberOfHits = 0;
 };
 
 struct VertexResult {
   TVector3 position;
   TMatrixDSym covariance{3};
   double chi2 = 0;
-  int ndf = 0;
-  double pairDCA = 0;            // distance between the two trajectories at the vertex
-  std::vector<double> sFromFirst; // per track: local s of the vertex (negative = upstream)
+  int degreesOfFreedom = 0;
+  double pairDistanceOfClosestApproach = 0; // distance between the two trajectories at the vertex
+  std::vector<double> arcPositionOfVertex;  // per track: arc position s of the vertex (negative = upstream)
   bool upstream = false;          // vertex before every track's first hit
   bool betweenIPAndHits = false;  // closer to the origin than every first hit, same side
 };
 
-std::optional<VertexResult> fitVertex(const std::vector<const ArcTrack*>& tracks, const Config& cfg);
+std::optional<VertexResult> fitVertex(const std::vector<const ArcTrack*>& tracks, const Config& config);
 
 } // namespace k4vertexing::arcpair

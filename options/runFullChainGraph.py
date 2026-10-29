@@ -1,11 +1,11 @@
 """
 Full reconstruction for the displaced 2-track LLP scan, ending in the ported
-graph-based displaced vertex finder.
+graph-based displaced vertex ggtfTrackFinder.
 
   digi (VTX + Si wrapper + DCH)  ->  GGTFTrackFinder  ->  GenfitTrackFitter (DAF)
                                  ->  GraphDisplacedVertexFinder
 
-The fitter uses the Deterministic Annealing Filter (DAF), which down-weights
+The genfitTrackFitter uses the Deterministic Annealing Filter (DAF), which down-weights
 outlier hits during the fit - the appropriate choice for displaced tracks where
 hit-to-track association is less certain than for prompt tracks.
 
@@ -25,16 +25,16 @@ parser.add_argument("--fitter", default="DAF", help="DAF (default) or KALMAN_REF
 parser.add_argument("--compact", default="FCCee/IDEA/compact/IDEA_o1_v03/IDEA_o1_v03.xml")
 args = parser.parse_args()
 
-svc = IOSvc("IOSvc")
-svc.Input = args.inputFile
-svc.Output = args.outputFile
+inputOutputService = IOSvc("IOSvc")
+inputOutputService.Input = args.inputFile
+inputOutputService.Output = args.outputFile
 
-id_service = UniqueIDGenSvc("UniqueIDGenSvc")
+uniqueIdService = UniqueIDGenSvc("UniqueIDGenSvc")
 
-geoservice = GeoSvc("GeoSvc")
-geoservice.detectors = [os.path.join(os.environ["K4GEO"], args.compact)]
-geoservice.OutputLevel = INFO
-geoservice.EnableGeant4Geo = False
+geometryService = GeoSvc("GeoSvc")
+geometryService.detectors = [os.path.join(os.environ["K4GEO"], args.compact)]
+geometryService.OutputLevel = INFO
+geometryService.EnableGeant4Geo = False
 
 from Configurables import DDPlanarDigi, DCHdigi_v02
 
@@ -46,61 +46,61 @@ outerVertexResolution_x = 0.050 / math.sqrt(12)
 outerVertexResolution_y = 0.150 / math.sqrt(12)
 outerVertexResolution_t = 1000
 
-vtxb = DDPlanarDigi("VTXBdigitizer")
-vtxb.SubDetectorName = "Vertex"
-vtxb.IsStrip = False
-vtxb.ResolutionU = [innerVertexResolution_x] * 3 + [outerVertexResolution_x] * 2
-vtxb.ResolutionV = [innerVertexResolution_y] * 3 + [outerVertexResolution_y] * 2
-vtxb.ResolutionT = [innerVertexResolution_t] * 3 + [outerVertexResolution_t] * 2
-vtxb.SimTrackHitCollectionName = ["VertexBarrelCollection"]
-vtxb.SimTrkHitRelCollection = ["VTXBSimDigiLinks"]
-vtxb.TrackerHitCollectionName = ["VTXBDigis"]
-vtxb.ForceHitsOntoSurface = True
-vtxb.CellIDBits = 32
+vertexBarrelDigitizer = DDPlanarDigi("VTXBdigitizer")
+vertexBarrelDigitizer.SubDetectorName = "Vertex"
+vertexBarrelDigitizer.IsStrip = False
+vertexBarrelDigitizer.ResolutionU = [innerVertexResolution_x] * 3 + [outerVertexResolution_x] * 2
+vertexBarrelDigitizer.ResolutionV = [innerVertexResolution_y] * 3 + [outerVertexResolution_y] * 2
+vertexBarrelDigitizer.ResolutionT = [innerVertexResolution_t] * 3 + [outerVertexResolution_t] * 2
+vertexBarrelDigitizer.SimTrackHitCollectionName = ["VertexBarrelCollection"]
+vertexBarrelDigitizer.SimTrkHitRelCollection = ["VTXBSimDigiLinks"]
+vertexBarrelDigitizer.TrackerHitCollectionName = ["VTXBDigis"]
+vertexBarrelDigitizer.ForceHitsOntoSurface = True
+vertexBarrelDigitizer.CellIDBits = 32
 
-vtxd = DDPlanarDigi("VTXDdigitizer")
-vtxd.SubDetectorName = "Vertex"
-vtxd.IsStrip = False
-vtxd.ResolutionU = [outerVertexResolution_x] * 3
-vtxd.ResolutionV = [outerVertexResolution_y] * 3
-vtxd.ResolutionT = [outerVertexResolution_t] * 3
-vtxd.SimTrackHitCollectionName = ["VertexEndcapCollection"]
-vtxd.SimTrkHitRelCollection = ["VTXDSimDigiLinks"]
-vtxd.TrackerHitCollectionName = ["VTXDDigis"]
-vtxd.ForceHitsOntoSurface = True
-vtxd.CellIDBits = 32
+vertexEndcapDigitizer = DDPlanarDigi("VTXDdigitizer")
+vertexEndcapDigitizer.SubDetectorName = "Vertex"
+vertexEndcapDigitizer.IsStrip = False
+vertexEndcapDigitizer.ResolutionU = [outerVertexResolution_x] * 3
+vertexEndcapDigitizer.ResolutionV = [outerVertexResolution_y] * 3
+vertexEndcapDigitizer.ResolutionT = [outerVertexResolution_t] * 3
+vertexEndcapDigitizer.SimTrackHitCollectionName = ["VertexEndcapCollection"]
+vertexEndcapDigitizer.SimTrkHitRelCollection = ["VTXDSimDigiLinks"]
+vertexEndcapDigitizer.TrackerHitCollectionName = ["VTXDDigis"]
+vertexEndcapDigitizer.ForceHitsOntoSurface = True
+vertexEndcapDigitizer.CellIDBits = 32
 
 # ---------------- silicon wrapper ----------------
 siWrapperResolution_x = 0.050 / math.sqrt(12)
 siWrapperResolution_y = 1.0 / math.sqrt(12)
 siWrapperResolution_t = 0.040
 
-siwrb = DDPlanarDigi("SiWrBdigitizer")
-siwrb.SubDetectorName = "SiWrB"
-siwrb.IsStrip = False
-siwrb.ResolutionU = [siWrapperResolution_x] * 2
-siwrb.ResolutionV = [siWrapperResolution_y] * 2
-siwrb.ResolutionT = [siWrapperResolution_t] * 2
-siwrb.SimTrackHitCollectionName = ["SiWrBCollection"]
-siwrb.SimTrkHitRelCollection = ["SiWrBSimDigiLinks"]
-siwrb.TrackerHitCollectionName = ["SiWrBDigis"]
-siwrb.ForceHitsOntoSurface = True
-siwrb.CellIDBits = 32
+siliconWrapperBarrelDigitizer = DDPlanarDigi("SiWrBdigitizer")
+siliconWrapperBarrelDigitizer.SubDetectorName = "SiWrB"
+siliconWrapperBarrelDigitizer.IsStrip = False
+siliconWrapperBarrelDigitizer.ResolutionU = [siWrapperResolution_x] * 2
+siliconWrapperBarrelDigitizer.ResolutionV = [siWrapperResolution_y] * 2
+siliconWrapperBarrelDigitizer.ResolutionT = [siWrapperResolution_t] * 2
+siliconWrapperBarrelDigitizer.SimTrackHitCollectionName = ["SiWrBCollection"]
+siliconWrapperBarrelDigitizer.SimTrkHitRelCollection = ["SiWrBSimDigiLinks"]
+siliconWrapperBarrelDigitizer.TrackerHitCollectionName = ["SiWrBDigis"]
+siliconWrapperBarrelDigitizer.ForceHitsOntoSurface = True
+siliconWrapperBarrelDigitizer.CellIDBits = 32
 
-siwrd = DDPlanarDigi("SiWrDdigitizer")
-siwrd.SubDetectorName = "SiWrD"
-siwrd.IsStrip = False
-siwrd.ResolutionU = [siWrapperResolution_x] * 2
-siwrd.ResolutionV = [siWrapperResolution_y] * 2
-siwrd.ResolutionT = [siWrapperResolution_t] * 2
-siwrd.SimTrackHitCollectionName = ["SiWrDCollection"]
-siwrd.SimTrkHitRelCollection = ["SiWrDSimDigiLinks"]
-siwrd.TrackerHitCollectionName = ["SiWrDDigis"]
-siwrd.ForceHitsOntoSurface = True
-siwrd.CellIDBits = 32
+siliconWrapperEndcapDigitizer = DDPlanarDigi("SiWrDdigitizer")
+siliconWrapperEndcapDigitizer.SubDetectorName = "SiWrD"
+siliconWrapperEndcapDigitizer.IsStrip = False
+siliconWrapperEndcapDigitizer.ResolutionU = [siWrapperResolution_x] * 2
+siliconWrapperEndcapDigitizer.ResolutionV = [siWrapperResolution_y] * 2
+siliconWrapperEndcapDigitizer.ResolutionT = [siWrapperResolution_t] * 2
+siliconWrapperEndcapDigitizer.SimTrackHitCollectionName = ["SiWrDCollection"]
+siliconWrapperEndcapDigitizer.SimTrkHitRelCollection = ["SiWrDSimDigiLinks"]
+siliconWrapperEndcapDigitizer.TrackerHitCollectionName = ["SiWrDDigis"]
+siliconWrapperEndcapDigitizer.ForceHitsOntoSurface = True
+siliconWrapperEndcapDigitizer.CellIDBits = 32
 
 # ---------------- drift chamber ----------------
-dch = DCHdigi_v02(
+driftChamberDigitizer = DCHdigi_v02(
     "DCHdigi2",
     InputSimHitCollection=["DCHCollection"],
     OutputDigihitCollection=["DCH_DigiCollection"],
@@ -120,7 +120,7 @@ dch = DCHdigi_v02(
 # ---------------- track finding ----------------
 from Configurables import GGTFTrackFinder
 
-finder = GGTFTrackFinder(
+ggtfTrackFinder = GGTFTrackFinder(
     "GGTFTrackFinder",
     InputPlanarHitCollections=["VTXBDigis", "VTXDDigis", "SiWrBDigis", "SiWrDDigis"],
     InputWireHitCollections=["DCH_DigiCollection"],
@@ -132,7 +132,7 @@ finder = GGTFTrackFinder(
 # ---------------- track fitting (DAF) ----------------
 from Configurables import GenfitTrackFitter
 
-fitter = GenfitTrackFitter(
+genfitTrackFitter = GenfitTrackFitter(
     "GenfitTrackFitter",
     InputTracks=["GGTFTracks"],
     OutputFittedTracks=["FittedTracks"],
@@ -140,15 +140,15 @@ fitter = GenfitTrackFitter(
     OutputFittedHits=["FittedHits"],
     OutputLevel=INFO,
 )
-fitter.FitterType = args.fitter        # "DAF": deterministic annealing filter
-fitter.BetaInit = 100.0                # annealing schedule (DAF only)
-fitter.BetaFinal = 0.05
-fitter.BetaSteps = 15
+genfitTrackFitter.FitterType = args.genfitTrackFitter        # "DAF": deterministic annealing filter
+genfitTrackFitter.BetaInit = 100.0                # annealing schedule (DAF only)
+genfitTrackFitter.BetaFinal = 0.05
+genfitTrackFitter.BetaSteps = 15
 
 # ---------------- graph-based displaced vertexing ----------------
 from Configurables import GraphDisplacedVertexFinder
 
-vertexer = GraphDisplacedVertexFinder(
+graphVertexFinder = GraphDisplacedVertexFinder(
     "GraphDisplacedVertexFinder",
     InputTracks=["FittedTracks"],
     OutputDisplacedVertices=["DisplacedVertices"],
@@ -164,9 +164,9 @@ vertexer = GraphDisplacedVertexFinder(
 )
 
 ApplicationMgr(
-    TopAlg=[vtxb, vtxd, siwrb, siwrd, dch, finder, fitter, vertexer],
+    TopAlg=[vertexBarrelDigitizer, vertexEndcapDigitizer, siliconWrapperBarrelDigitizer, siliconWrapperEndcapDigitizer, driftChamberDigitizer, ggtfTrackFinder, genfitTrackFitter, graphVertexFinder],
     EvtSel="NONE",
     EvtMax=-1,
-    ExtSvc=[EventDataSvc("EventDataSvc"), id_service],
+    ExtSvc=[EventDataSvc("EventDataSvc"), uniqueIdService],
     OutputLevel=INFO,
 )

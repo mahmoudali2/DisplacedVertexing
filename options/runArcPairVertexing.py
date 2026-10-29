@@ -28,16 +28,16 @@ parser.add_argument("--stateLocation", type=int, default=2,
                     help="track state whose omega gives the momentum (1 AtIP, 2 AtFirstHit, 3 AtLastHit)")
 args = parser.parse_args()
 
-svc = IOSvc("IOSvc")
-svc.Input = args.inputFile
-svc.Output = args.outputFile
+inputOutputService = IOSvc("IOSvc")
+inputOutputService.Input = args.inputFile
+inputOutputService.Output = args.outputFile
 
 try:
     from Configurables import ArcPairVertexFinder
 except ImportError:
     from DisplacedVertexing.DisplacedVertexingConf import ArcPairVertexFinder
 
-arc = ArcPairVertexFinder(
+arcPairVertexFinder = ArcPairVertexFinder(
     "ArcPairVertexFinder",
     InputTracks=[args.inputTracks],
     OutputVertices=[args.outputVertices],
@@ -97,7 +97,7 @@ arc = ArcPairVertexFinder(
 )
 
 ApplicationMgr(
-    TopAlg=[arc],
+    TopAlg=[arcPairVertexFinder],
     EvtSel="NONE",
     EvtMax=-1,
     ExtSvc=[EventDataSvc("EventDataSvc"), UniqueIDGenSvc("UniqueIDGenSvc")],

@@ -27,16 +27,16 @@ parser.add_argument("--stateLocation", type=int, default=2,
                     help="track state used (1 AtIP, 2 AtFirstHit, 3 AtLastHit)")
 args = parser.parse_args()
 
-svc = IOSvc("IOSvc")
-svc.Input = args.inputFile
-svc.Output = args.outputFile
+inputOutputService = IOSvc("IOSvc")
+inputOutputService.Input = args.inputFile
+inputOutputService.Output = args.outputFile
 
 try:
     from Configurables import HelixPairVertexFinder
 except ImportError:
     from DisplacedVertexing.DisplacedVertexingConf import HelixPairVertexFinder
 
-helix = HelixPairVertexFinder(
+helixPairVertexFinder = HelixPairVertexFinder(
     "HelixPairVertexFinder",
     InputTracks=[args.inputTracks],
     OutputVertices=[args.outputVertices],
@@ -45,6 +45,7 @@ helix = HelixPairVertexFinder(
     StateLocation=args.stateLocation,
     StateReference="referencePoint",   # EDM4hep convention
     StateReversed=False,
+    UseCovariance=True,                # vertex fit with the state covariances (chi2, covariance)
 
     # ---- detector: magnetic field ----------------------------------------------------
     # one field everywhere: leave FieldR and FieldHalfZ at their (very large) defaults
@@ -80,6 +81,7 @@ helix = HelixPairVertexFinder(
     MinMass=0.0,                       # GeV
     MaxMass=1.0e9,                     # GeV
     MinCosOpening=-1.0,
+    MaxChi2=1.0e9,                     # fitted vertices only (ndf = 1)
 
     # ---- output ----------------------------------------------------------------------------
     AllowMultipleVertices=True,
@@ -89,7 +91,7 @@ helix = HelixPairVertexFinder(
 )
 
 ApplicationMgr(
-    TopAlg=[helix],
+    TopAlg=[helixPairVertexFinder],
     EvtSel="NONE",
     EvtMax=-1,
     ExtSvc=[EventDataSvc("EventDataSvc"), UniqueIDGenSvc("UniqueIDGenSvc")],

@@ -44,13 +44,15 @@ parser.add_argument("--fieldUncertainty", type=float, default=0.5,
                     help="arc: field mismatch [T] in the bending-plane error; 0 = off")
 parser.add_argument("--noCurvature", action="store_true", help="arc: straight line in xy instead of a circle")
 parser.add_argument("--debug", action="store_true", help="print the per-event counts of both finders")
+parser.add_argument("--useCovariance", action="store_true",
+                    help="helix: fit the vertex with the track-state covariances (tracks fitted with GenFit)")
 parser.add_argument("--stateLocation", type=int, default=2,
                     help="helix: track state used (1 AtIP, 2 AtFirstHit, 3 AtLastHit)")
 args = parser.parse_args()
 
-svc = IOSvc("IOSvc")
-svc.Input = args.inputFile
-svc.Output = args.outputFile
+inputOutputService = IOSvc("IOSvc")
+inputOutputService.Input = args.inputFile
+inputOutputService.Output = args.outputFile
 
 try:
     from Configurables import HelixPairVertexFinder, ArcPairVertexFinder
@@ -60,19 +62,23 @@ except ImportError:
 # ---------------------------------------------------------------------------
 # IDEA geometry used by both finders
 # ---------------------------------------------------------------------------
-SOLENOID_R = 2300.0       # mm, vertex region "outside" = beyond this cylinder
+SOLENOID_RADIUS = 2300.0       # mm, vertex region "outside" = beyond this cylinder
 SOLENOID_HALF_Z = 2180.0  # mm
 
 # ---------------------------------------------------------------------------
 # 3D helix vertexer
 # ---------------------------------------------------------------------------
-helix = HelixPairVertexFinder(
+helixPairVertexFinder = HelixPairVertexFinder(
     "HelixPairVertexFinder",
     InputTracks=[args.inputTracks],
     OutputVertices=["MuonSystemHelixVertices"],
 
     # ---- track input -----------------------------------------------------------
     StateLocation=args.stateLocation,
+    # the CTF circle-fit state carries fixed covariance floors, not the covariance of the
+    # fit: weighting the tracks with it makes the vertex worse, so the closest-approach
+    # midpoint is used (--useCovariance for tracks fitted with GenFit)
+    UseCovariance=args.useCovariance,
 
     # ---- detector: magnetic field ----------------------------------------------------
     # field map of the IDEA_o1_v05 simulation: +2 T inside the coil volume,
@@ -102,7 +108,7 @@ helix = HelixPairVertexFinder(
     # ---- vertex selection ------------------------------------------------------------------
     MaxPairDCA=300.0,                  # mm
     Region=args.region,
-    RegionR=SOLENOID_R,
+    RegionR=SOLENOID_RADIUS,
     RegionHalfZ=SOLENOID_HALF_Z,
     OutputLevel=INFO,
 )
@@ -110,7 +116,7 @@ helix = HelixPairVertexFinder(
 # ---------------------------------------------------------------------------
 # arc vertexer
 # ---------------------------------------------------------------------------
-arc = ArcPairVertexFinder(
+arcPairVertexFinder = ArcPairVertexFinder(
     "ArcPairVertexFinder",
     InputTracks=[args.inputTracks],
     OutputVertices=["MuonSystemVertices"],
@@ -146,32 +152,32 @@ arc = ArcPairVertexFinder(
     # ---- vertex selection ------------------------------------------------------------------
     MaxPairDCA=100.0,                  # mm
     Region=args.region,
-    RegionR=SOLENOID_R,
+    RegionR=SOLENOID_RADIUS,
     RegionHalfZ=SOLENOID_HALF_Z,
     OutputLevel=INFO,
 )
 
 if args.loose:
-    for f in (helix, arc):
-        f.MaxPairDCA = 1.0e9
-        f.RequireOppositeCharge = False
-        f.AllowMultipleVertices = True
-        f.KeepOverlappingPairs = True
-        f.RequireBetweenIPAndHits = False
-        f.RequireUpstream = False
-        f.Region = "any"
-    arc.MaxChi2 = 1.0e12
-    arc.MinUpstreamDistance = -1.0e9
+    for vertexFinder in (helixPairVertexFinder, arcPairVertexFinder):
+        vertexFinder.MaxPairDCA = 1.0e9
+        vertexFinder.RequireOppositeCharge = False
+        vertexFinder.AllowMultipleVertices = True
+        vertexFinder.KeepOverlappingPairs = True
+        vertexFinder.RequireBetweenIPAndHits = False
+        vertexFinder.RequireUpstream = False
+        vertexFinder.Region = "any"
+    arcPairVertexFinder.MaxChi2 = 1.0e12
+    arcPairVertexFinder.MinUpstreamDistance = -1.0e9
 
 if args.debug:
-    helix.OutputLevel = DEBUG
-    arc.OutputLevel = DEBUG
+    helixPairVertexFinder.OutputLevel = DEBUG
+    arcPairVertexFinder.OutputLevel = DEBUG
 
 algorithms = []
 if not args.noHelix:
-    algorithms.append(helix)
+    algorithms.append(helixPairVertexFinder)
 if not args.noArc:
-    algorithms.append(arc)
+    algorithms.append(arcPairVertexFinder)
 
 ApplicationMgr(
     TopAlg=algorithms,

@@ -90,34 +90,34 @@ struct GraphDisplacedVertexFinder final
     // along the helix that angle advances as (-omega * s)
     const double perigeeX = -d0 * std::sin(phi), perigeeY = d0 * std::cos(phi);
     const double anglePerigee = std::atan2(perigeeY - centreY, perigeeX - centreX);
-    const double angleRef = std::atan2(state.referencePoint.y - centreY, state.referencePoint.x - centreX);
-    double dAngle = anglePerigee - angleRef;
-    while (dAngle > M_PI)
-      dAngle -= 2.0 * M_PI;
-    while (dAngle < -M_PI)
-      dAngle += 2.0 * M_PI;
-    const double sStar = dAngle / omega;
+    const double angleAtReference = std::atan2(state.referencePoint.y - centreY, state.referencePoint.x - centreX);
+    double angleDifference = anglePerigee - angleAtReference;
+    while (angleDifference > M_PI)
+      angleDifference -= 2.0 * M_PI;
+    while (angleDifference < -M_PI)
+      angleDifference += 2.0 * M_PI;
+    const double arcLengthPerigeeToReference = angleDifference / omega;
 
     // covariance: unpack, apply J, repack
-    TMatrixDSym cov = unpackCovariance(state);
+    TMatrixDSym covariance = unpackCovariance(state);
     TMatrixD jacobian(kNPerigee, kNPerigee);
     jacobian.UnitMatrix();
     jacobian(kD0, kD0) = -1.0;
     jacobian(kOmega, kOmega) = -1.0;
-    jacobian(kZ0, kTanLambda) = -sStar;
-    cov.Similarity(jacobian); // J * C * J^T
+    jacobian(kZ0, kTanLambda) = -arcLengthPerigeeToReference;
+    covariance.Similarity(jacobian); // J * C * J^T
 
     state.D0 = static_cast<float>(d0);
     state.omega = static_cast<float>(omega);
-    state.Z0 = static_cast<float>(state.Z0 - tanLambda * sStar);
+    state.Z0 = static_cast<float>(state.Z0 - tanLambda * arcLengthPerigeeToReference);
     int packed = 0;
     for (int row = 0; row < kNPerigee; ++row)
       for (int column = 0; column <= row; ++column, ++packed)
-        state.covMatrix[packed] = static_cast<float>(cov(row, column));
+        state.covMatrix[packed] = static_cast<float>(covariance(row, column));
   }
 
   /// Build the kernel's track view from one EDM4hep track.
-  bool makeTrack(const edm4hep::Track& track, int index, GraphTrack& out) const {
+  bool makeTrack(const edm4hep::Track& track, int trackIndex, GraphTrack& graphTrack) const {
     if (m_skipFailedFits && (track.getNdf() <= 0 || track.getChi2() < 0.))
       return false;
 
@@ -143,24 +143,24 @@ struct GraphDisplacedVertexFinder final
     if (!hasUsableCovariance(covariance))
       return false;
 
-    out.D0 = parameters(0);
-    out.Phi = parameters(1);
-    out.C = parameters(2);
-    out.DZ = parameters(3);
-    out.CtgTheta = parameters(4);
-    out.TrackCovariance = covariance;
+    graphTrack.D0 = parameters(0);
+    graphTrack.Phi = parameters(1);
+    graphTrack.C = parameters(2);
+    graphTrack.DZ = parameters(3);
+    graphTrack.CtgTheta = parameters(4);
+    graphTrack.TrackCovariance = covariance;
 
-    const double pt = transverseMomentum(state->omega, m_magneticFieldZ);
-    const double pz = pt * state->tanLambda;
+    const double transverseMomentumValue = transverseMomentum(state->omega, m_magneticFieldZ);
+    const double longitudinalMomentum = transverseMomentumValue * state->tanLambda;
     const double mass = m_particleMass;
-    out.PT = pt;
-    out.Mass = mass;
-    out.Charge = (corrected.omega > 0.f) ? +1 : -1;
-    out.Momentum.SetXYZM(pt * std::cos(corrected.phi), pt * std::sin(corrected.phi), pz, mass);
+    graphTrack.PT = transverseMomentumValue;
+    graphTrack.Mass = mass;
+    graphTrack.Charge = (corrected.omega > 0.f) ? +1 : -1;
+    graphTrack.Momentum.SetXYZM(transverseMomentumValue * std::cos(corrected.phi), transverseMomentumValue * std::sin(corrected.phi), longitudinalMomentum, mass);
     // No per-hit timing in this input; ErrorT <= 0 tells the kernel to skip timing.
-    out.Position.SetXYZT(state->referencePoint.x, state->referencePoint.y, state->referencePoint.z, 0.0);
-    out.ErrorT = -1.0;
-    out.sourceIndex = index;
+    graphTrack.Position.SetXYZT(state->referencePoint.x, state->referencePoint.y, state->referencePoint.z, 0.0);
+    graphTrack.ErrorT = -1.0;
+    graphTrack.sourceIndex = trackIndex;
     return true;
   }
 
@@ -170,28 +170,28 @@ struct GraphDisplacedVertexFinder final
     edm4hep::VertexCollection primaryVertices;
 
     // ---- build the kernel's track views -----------------------------------
-    std::vector<std::unique_ptr<GraphTrack>> storage;
-    std::vector<const Candidate*> view;
-    storage.reserve(tracks.size());
-    view.reserve(tracks.size());
-    int index = 0;
+    std::vector<std::unique_ptr<GraphTrack>> trackStorage;
+    std::vector<const Candidate*> kernelTracks;
+    trackStorage.reserve(tracks.size());
+    kernelTracks.reserve(tracks.size());
+    int trackIndex = 0;
     for (const auto& track : tracks) {
-      auto entry = std::make_unique<GraphTrack>();
-      if (makeTrack(track, index, *entry)) {
-        view.push_back(entry.get());
-        storage.push_back(std::move(entry));
+      auto graphTrack = std::make_unique<GraphTrack>();
+      if (makeTrack(track, trackIndex, *graphTrack)) {
+        kernelTracks.push_back(graphTrack.get());
+        trackStorage.push_back(std::move(graphTrack));
       }
-      ++index;
+      ++trackIndex;
     }
-    debug() << "Using " << view.size() << " of " << tracks.size() << " tracks" << endmsg;
-    if (view.size() < static_cast<std::size_t>(m_minTracks))
+    debug() << "Using " << kernelTracks.size() << " of " << tracks.size() << " tracks" << endmsg;
+    if (kernelTracks.size() < static_cast<std::size_t>(m_minTracks))
       return std::make_tuple(std::move(displacedVertices), std::move(primaryVertices));
 
     // ---- configure and run -------------------------------------------------
     GraphVertexKernel kernel;
     configure(kernel);
     kernel.Init();
-    kernel.SetTracks(view);
+    kernel.SetTracks(kernelTracks);
     kernel.Process();
 
     // ---- primary vertex ----------------------------------------------------
